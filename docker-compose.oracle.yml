@@ -1,0 +1,64 @@
+x-oracle-env: &oracle-env
+  ORACLE_HOME: /opt/oracle/instantclient
+  LD_LIBRARY_PATH: /opt/oracle/instantclient
+
+services:
+  db:
+    ports: !override
+      - "127.0.0.1:5433:5432"
+
+  superset-node:
+    profiles:
+      - dev-frontend
+
+  superset:
+    environment:
+      <<: *oracle-env
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.oracle
+      args:
+        SUPERSET_BASE_IMAGE: apache/superset:4.1.4
+        INSTANTCLIENT_ZIP: instantclient-basic-linux.x64-23.26.0.0.0.zip
+    volumes: !override
+      - ./docker:/app/docker
+      - superset_home:/app/superset_home
+
+  superset-init:
+    environment:
+      <<: *oracle-env
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.oracle
+      args:
+        SUPERSET_BASE_IMAGE: apache/superset:4.1.4
+        INSTANTCLIENT_ZIP: instantclient-basic-linux.x64-23.26.0.0.0.zip
+    volumes: !override
+      - ./docker:/app/docker
+      - superset_home:/app/superset_home
+
+  superset-worker:
+    environment:
+      <<: *oracle-env
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.oracle
+      args:
+        SUPERSET_BASE_IMAGE: apache/superset:4.1.4
+        INSTANTCLIENT_ZIP: instantclient-basic-linux.x64-23.26.0.0.0.zip
+    volumes: !override
+      - ./docker:/app/docker
+      - superset_home:/app/superset_home
+
+  superset-worker-beat:
+    environment:
+      <<: *oracle-env
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.oracle
+      args:
+        SUPERSET_BASE_IMAGE: apache/superset:4.1.4
+        INSTANTCLIENT_ZIP: instantclient-basic-linux.x64-23.26.0.0.0.zip
+    volumes: !override
+      - ./docker:/app/docker
+      - superset_home:/app/superset_home

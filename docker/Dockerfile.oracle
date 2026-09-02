@@ -1,0 +1,37 @@
+#
+# Oracle-enabled Superset image for local Docker Compose usage.
+#
+ARG SUPERSET_BASE_IMAGE=apache/superset:4.1.4
+FROM ${SUPERSET_BASE_IMAGE} AS oracle
+
+USER root
+
+ARG INSTANTCLIENT_ZIP=instantclient-basic-linux.x64-23.26.0.0.0.zip
+ENV ORACLE_HOME=/opt/oracle/instantclient \
+    LD_LIBRARY_PATH=/opt/oracle/instantclient \
+    PATH=/opt/oracle/instantclient:${PATH}
+
+RUN apt-get update -qq \
+    && apt-get install -yqq --no-install-recommends \
+      build-essential \
+      libaio1 \
+      unzip \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY ${INSTANTCLIENT_ZIP} /tmp/instantclient.zip
+
+RUN mkdir -p /opt/oracle \
+    && unzip /tmp/instantclient.zip -d /opt/oracle \
+    && rm -f /tmp/instantclient.zip \
+    && mv /opt/oracle/instantclient_* /opt/oracle/instantclient \
+    && mkdir -p /opt/oracle/instantclient/lib \
+    && cd /opt/oracle/instantclient/lib \
+    && for lib in ../*.so*; do ln -sf "$lib" .; done \
+    && ln -sfn /opt/oracle/instantclient /opt/oracle/instantclient_23_26 \
+    && echo /opt/oracle/instantclient > /etc/ld.so.conf.d/oracle-instantclient.conf \
+    && ldconfig \
+    && pip install --no-cache-dir cx_Oracle==8.0.1 psycopg2-binary==2.9.6 Jinja2
+
+USER superset
+
+FROM oracle AS dev
