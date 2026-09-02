@@ -46,7 +46,7 @@
     "bootstrap": "^3.4.1",
     "core-js": "3.37.1",
     "gh-pages": "^5.0.0",
-    "jquery": "^3.7.1",
+    "jquery": "^4.0.0",
     "memoize-one": "^6.0.0",
     "react": "^16.13.1",
     "react-dom": "^16.13.1",
