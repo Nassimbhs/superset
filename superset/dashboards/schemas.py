@@ -137,7 +137,9 @@ class DashboardJSONMetadataSchema(Schema):
     color_namespace = fields.Str(allow_none=True)
     positions = fields.Dict(allow_none=True)
     label_colors = fields.Dict()
-    shared_label_colors = fields.Dict()
+    # Frontend may send a list of label names (newer format) or a dict of label→color
+    shared_label_colors = fields.Raw(allow_none=True)
+    map_label_colors = fields.Dict(allow_none=True)
     color_scheme_domain = fields.List(fields.Str())
     cross_filters_enabled = fields.Boolean(dump_default=True)
     # used for v0 import/export
@@ -160,6 +162,14 @@ class DashboardJSONMetadataSchema(Schema):
         """
         if "show_native_filters" in data:
             del data["show_native_filters"]
+
+        # Normalize shared_label_colors: list (label names) is valid in the UI;
+        # older schema expected a dict. Keep list as-is; coerce invalid types.
+        slc = data.get("shared_label_colors")
+        if slc is None:
+            data["shared_label_colors"] = {}
+        elif not isinstance(slc, (dict, list)):
+            data["shared_label_colors"] = {}
 
         return data
 

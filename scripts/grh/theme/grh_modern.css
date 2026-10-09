@@ -1,0 +1,248 @@
+/* GRH modern theme for Superset dashboards.
+   Animations use fill-mode "backwards" so no transform remains once they end:
+   a lingering transform would break the full-screen chart (position: fixed). */
+
+.dashboard {
+  --grh-primary: #2563eb;
+  --grh-accent: #0ea5e9;
+  --grh-ink: #0f172a;
+  --grh-muted: #64748b;
+  --grh-surface: #ffffff;
+  --grh-border: rgba(15, 23, 42, 0.06);
+  --grh-card-border: #d5dde8;
+  --grh-card-border-hover: rgba(37, 99, 235, 0.55);
+  --grh-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 4px 16px rgba(15, 23, 42, 0.06);
+  --grh-shadow-hover: 0 2px 4px rgba(15, 23, 42, 0.06), 0 12px 32px rgba(37, 99, 235, 0.14);
+  --grh-radius: 14px;
+  --grh-ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* ---------------------------------------------------------------- keyframes */
+
+@keyframes grh-rise {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: none; }
+}
+
+@keyframes grh-pop {
+  from { opacity: 0; transform: scale(0.92); }
+  to   { opacity: 1; transform: none; }
+}
+
+@keyframes grh-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes grh-shimmer {
+  from { background-position: -200% 0; }
+  to   { background-position: 200% 0; }
+}
+
+/* ---------------------------------------------------------------- page */
+
+.dashboard-content {
+  background: linear-gradient(180deg, #f1f5fb 0%, #f8fafc 240px);
+}
+
+.dashboard-header-container {
+  backdrop-filter: saturate(1.4) blur(6px);
+  box-shadow: 0 1px 0 var(--grh-border);
+}
+
+.dashboard-header-container .editable-title input,
+.dashboard-header-container .dynamic-title-input {
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--grh-ink);
+}
+
+/* ---------------------------------------------------------------- rows: staggered entrance */
+
+.grid-content > div {
+  animation: grh-rise 0.6s var(--grh-ease) backwards;
+}
+.grid-content > div:nth-child(1) { animation-delay: 0.00s; }
+.grid-content > div:nth-child(2) { animation-delay: 0.08s; }
+.grid-content > div:nth-child(3) { animation-delay: 0.16s; }
+.grid-content > div:nth-child(4) { animation-delay: 0.24s; }
+.grid-content > div:nth-child(5) { animation-delay: 0.32s; }
+.grid-content > div:nth-child(6) { animation-delay: 0.40s; }
+.grid-content > div:nth-child(n+7) { animation-delay: 0.48s; }
+
+/* ---------------------------------------------------------------- cards */
+
+.dashboard .dashboard-component-chart-holder {
+  border-radius: var(--grh-radius);
+  border: 1px solid var(--grh-card-border);
+  box-shadow: var(--grh-shadow);
+  transition: box-shadow 0.25s var(--grh-ease), border-color 0.25s var(--grh-ease);
+  overflow: hidden;
+}
+
+.dashboard .dashboard-component-chart-holder:hover {
+  box-shadow: var(--grh-shadow-hover);
+  border-color: var(--grh-card-border-hover);
+}
+
+/* Accent bar revealed on hover */
+.dashboard-component-chart-holder::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--grh-primary), var(--grh-accent));
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.35s var(--grh-ease);
+  z-index: 1;
+  pointer-events: none;
+}
+.dashboard-component-chart-holder:hover::before {
+  transform: scaleX(1);
+}
+
+/* Chart titles */
+.dashboard-component-chart-holder .header-title {
+  font-weight: 600;
+  color: var(--grh-ink);
+  letter-spacing: -0.005em;
+}
+
+/* Loading shimmer instead of the bare spinner area */
+.dashboard-component-chart-holder .chart-container .loading,
+.dashboard-component-chart-holder .slice_container:empty {
+  background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+  background-size: 200% 100%;
+  animation: grh-shimmer 1.4s linear infinite;
+  border-radius: 8px;
+}
+
+/* ---------------------------------------------------------------- KPI (big numbers) */
+
+.superset-legacy-chart-big-number .header-line {
+  background: linear-gradient(135deg, var(--grh-primary), var(--grh-accent));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent !important;
+  font-weight: 800 !important;
+  letter-spacing: -0.02em;
+  animation: grh-pop 0.7s var(--grh-ease) 0.2s backwards;
+}
+
+.superset-legacy-chart-big-number .subheader-line {
+  color: var(--grh-muted) !important;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 500;
+  animation: grh-fade 0.6s ease 0.45s backwards;
+}
+
+/* ---------------------------------------------------------------- navigation row */
+
+#MARKDOWN-grh-nav {
+  background: linear-gradient(120deg, #1e3a8a 0%, #2563eb 55%, #0ea5e9 100%);
+  border-radius: var(--grh-radius);
+  box-shadow: 0 8px 24px rgba(37, 99, 235, 0.25);
+}
+
+.dashboard #MARKDOWN-grh-nav .dashboard-component-chart-holder {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+#MARKDOWN-grh-nav .dashboard-component-chart-holder::before {
+  display: none;
+}
+
+#MARKDOWN-grh-nav .dashboard-markdown,
+#MARKDOWN-grh-nav .markdown-container,
+#MARKDOWN-grh-nav .safe-markdown {
+  overflow: hidden !important;
+  height: 100%;
+}
+
+#MARKDOWN-grh-nav .safe-markdown {
+  display: flex;
+  align-items: center;
+  padding: 0 4px;
+}
+
+#MARKDOWN-grh-nav p {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  margin: 0;
+  width: 100%;
+}
+
+#MARKDOWN-grh-nav a,
+#MARKDOWN-grh-nav strong {
+  display: inline-block;
+  padding: 4px 11px;
+  border-radius: 999px;
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: nowrap;
+  font-weight: 600;
+  text-decoration: none;
+  transition: background-color 0.2s ease, color 0.2s ease, transform 0.2s var(--grh-ease);
+}
+
+#MARKDOWN-grh-nav a {
+  color: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.12);
+}
+#MARKDOWN-grh-nav a:hover {
+  color: #1e3a8a;
+  background: #fff;
+  transform: translateY(-1px);
+}
+
+#MARKDOWN-grh-nav strong {
+  color: #1e3a8a;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.18);
+}
+
+/* ---------------------------------------------------------------- tables */
+
+.dashboard-component-chart-holder table thead th {
+  background: #f8fafc;
+  color: var(--grh-muted);
+  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+}
+.dashboard-component-chart-holder table tbody tr {
+  transition: background-color 0.15s ease;
+}
+.dashboard-component-chart-holder table tbody tr:hover td {
+  background: rgba(37, 99, 235, 0.05);
+}
+
+/* ---------------------------------------------------------------- filter bar */
+
+[data-test="filter-bar"] {
+  background: #fbfdff;
+  border-right: 1px solid var(--grh-border);
+}
+[data-test="filter-bar"] .ant-select-selector,
+[data-test="filter-bar"] .ant-picker {
+  border-radius: 8px !important;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+[data-test="filter-bar"] .ant-select-focused .ant-select-selector {
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15) !important;
+}
+
+/* ---------------------------------------------------------------- accessibility */
+
+@media (prefers-reduced-motion: reduce) {
+  .dashboard *,
+  .dashboard *::before {
+    animation: none !important;
+    transition: none !important;
+  }
+}
