@@ -2,6 +2,7 @@ SELECT
     a.cod_soc,
     a.num_aut,
     a.mat_pers,
+    e.nom_prenom,
     e.sexe,
     e.pole,
     e.direction,

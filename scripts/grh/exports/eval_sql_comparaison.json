@@ -1,0 +1,392 @@
+{
+  "before": {
+    "date": "2026-10-12",
+    "questions": 30,
+    "exact": 29,
+    "different": 1,
+    "refused": 0,
+    "errors": 0,
+    "retried": 2,
+    "accuracy": 0.967,
+    "median_seconds": 9.35,
+    "p90_seconds": 20.95
+  },
+  "after": {
+    "date": "2026-10-12",
+    "unstable": 0,
+    "median_first_run_seconds": 12.45,
+    "questions": 30,
+    "exact": 29,
+    "different": 1,
+    "refused": 0,
+    "errors": 0,
+    "retried": 2,
+    "accuracy": 0.967,
+    "median_seconds": 12.45,
+    "p90_seconds": 21.7
+  },
+  "gained": [],
+  "lost": [],
+  "questions": [
+    {
+      "question": "Nombre d'entrées et de sorties en 2025",
+      "before": "exact",
+      "after": "exact",
+      "before_seconds": 16.0,
+      "after_seconds": 14.4,
+      "runs": [
+        "exact"
+      ],
+      "unstable": false,
+      "change": ""
+    },
+    {
+      "question": "Jours d'absence par nature d'absence sur les 12 derniers mois",
+      "before": "exact",
+      "after": "exact",
+      "before_seconds": 24.4,
+      "after_seconds": 21.5,
+      "runs": [
+        "exact"
+      ],
+      "unstable": false,
+      "change": ""
+    },
+    {
+      "question": "Nombre d'agents actifs par sexe",
+      "before": "exact",
+      "after": "exact",
+      "before_seconds": 18.6,
+      "after_seconds": 20.9,
+      "runs": [
+        "exact"
+      ],
+      "unstable": false,
+      "change": ""
+    },
+    {
+      "question": "Âge moyen des agents actifs par catégorie",
+      "before": "exact",
+      "after": "exact",
+      "before_seconds": 7.9,
+      "after_seconds": 29.2,
+      "runs": [
+        "exact"
+      ],
+      "unstable": false,
+      "change": ""
+    },
+    {
+      "question": "Nombre d'agents actifs par tranche d'âge",
+      "before": "exact",
+      "after": "exact",
+      "before_seconds": 12.95,
+      "after_seconds": 5.2,
+      "runs": [
+        "exact"
+      ],
+      "unstable": false,
+      "change": ""
+    },
+    {
+      "question": "Jours de congé annuel pris en 2025 par direction",
+      "before": "exact",
+      "after": "exact",
+      "before_seconds": 20.95,
+      "after_seconds": 19.8,
+      "runs": [
+        "exact"
+      ],
+      "unstable": false,
+      "change": ""
+    },
+    {
+      "question": "Combien d'agents sont en congé en ce moment ?",
+      "before": "exact",
+      "after": "exact",
+      "before_seconds": 1.4,
+      "after_seconds": 12.2,
+      "runs": [
+        "exact"
+      ],
+      "unstable": false,
+      "change": ""
+    },
+    {
+      "question": "Nombre d'actions de formation par année",
+      "before": "exact",
+      "after": "exact",
+      "before_seconds": 5.2,
+      "after_seconds": 6.6,
+      "runs": [
+        "exact"
+      ],
+      "unstable": false,
+      "change": ""
+    },
+    {
+      "question": "Heures de formation par sexe",
+      "before": "exact",
+      "after": "exact",
+      "before_seconds": 9.45,
+      "after_seconds": 7.6,
+      "runs": [
+        "exact"
+      ],
+      "unstable": false,
+      "change": ""
+    },
+    {
+      "question": "Âge moyen au départ par type de départ",
+      "before": "exact",
+      "after": "exact",
+      "before_seconds": 12.75,
+      "after_seconds": 28.1,
+      "runs": [
+        "exact"
+      ],
+      "unstable": false,
+      "change": ""
+    },
+    {
+      "question": "Combien d'agents partent à la retraite en 2026 ?",
+      "before": "exact",
+      "after": "exact",
+      "before_seconds": 7.2,
+      "after_seconds": 7.0,
+      "runs": [
+        "exact"
+      ],
+      "unstable": false,
+      "change": ""
+    },
+    {
+      "question": "Nombre de prêts par groupe de prêt",
+      "before": "exact",
+      "after": "exact",
+      "before_seconds": 5.65,
+      "after_seconds": 9.6,
+      "runs": [
+        "exact"
+      ],
+      "unstable": false,
+      "change": ""
+    },
+    {
+      "question": "Montant accordé des prêts en cours par direction",
+      "before": "exact",
+      "after": "exact",
+      "before_seconds": 3.2,
+      "after_seconds": 13.9,
+      "runs": [
+        "exact"
+      ],
+      "unstable": false,
+      "change": ""
+    },
+    {
+      "question": "Nombre de mutations par raison",
+      "before": "exact",
+      "after": "exact",
+      "before_seconds": 15.9,
+      "after_seconds": 14.1,
+      "runs": [
+        "exact"
+      ],
+      "unstable": false,
+      "change": ""
+    },
+    {
+      "question": "Nombre de promotions par année",
+      "before": "exact",
+      "after": "exact",
+      "before_seconds": 9.25,
+      "after_seconds": 10.1,
+      "runs": [
+        "exact"
+      ],
+      "unstable": false,
+      "change": ""
+    },
+    {
+      "question": "Nombre de candidats par sexe",
+      "before": "exact",
+      "after": "exact",
+      "before_seconds": 6.4,
+      "after_seconds": 10.9,
+      "runs": [
+        "exact"
+      ],
+      "unstable": false,
+      "change": ""
+    },
+    {
+      "question": "Recrutements par nature de recrutement",
+      "before": "exact",
+      "after": "exact",
+      "before_seconds": 6.3,
+      "after_seconds": 10.0,
+      "runs": [
+        "exact"
+      ],
+      "unstable": false,
+      "change": ""
+    },
+    {
+      "question": "Jours de maladie par nature d'absence en 2025",
+      "before": "exact",
+      "after": "exact",
+      "before_seconds": 19.85,
+      "after_seconds": 17.7,
+      "runs": [
+        "exact"
+      ],
+      "unstable": false,
+      "change": ""
+    },
+    {
+      "question": "Nombre de demandes d'indemnités maladie par situation",
+      "before": "exact",
+      "after": "exact",
+      "before_seconds": 3.6,
+      "after_seconds": 11.7,
+      "runs": [
+        "exact"
+      ],
+      "unstable": false,
+      "change": ""
+    },
+    {
+      "question": "Coût employeur total en 2025",
+      "before": "exact",
+      "after": "exact",
+      "before_seconds": 23.65,
+      "after_seconds": 21.7,
+      "runs": [
+        "exact"
+      ],
+      "unstable": false,
+      "change": ""
+    },
+    {
+      "question": "Net à payer moyen par sexe le dernier mois",
+      "before": "exact",
+      "after": "exact",
+      "before_seconds": 11.549999999999999,
+      "after_seconds": 16.1,
+      "runs": [
+        "exact"
+      ],
+      "unstable": false,
+      "change": ""
+    },
+    {
+      "question": "Nombre de retards par jour de la semaine en 2026",
+      "before": "exact",
+      "after": "exact",
+      "before_seconds": 5.6,
+      "after_seconds": 14.1,
+      "runs": [
+        "exact"
+      ],
+      "unstable": false,
+      "change": ""
+    },
+    {
+      "question": "Minutes de sortie autorisée par direction en 2025",
+      "before": "exact",
+      "after": "exact",
+      "before_seconds": 16.75,
+      "after_seconds": 14.2,
+      "runs": [
+        "exact"
+      ],
+      "unstable": false,
+      "change": ""
+    },
+    {
+      "question": "Budget total et réalisé en 2025",
+      "before": "exact",
+      "after": "exact",
+      "before_seconds": 4.4,
+      "after_seconds": 5.5,
+      "runs": [
+        "exact"
+      ],
+      "unstable": false,
+      "change": ""
+    },
+    {
+      "question": "Nombre d'agents par tranche de note la dernière année",
+      "before": "exact",
+      "after": "exact",
+      "before_seconds": 13.149999999999999,
+      "after_seconds": 12.4,
+      "runs": [
+        "exact"
+      ],
+      "unstable": false,
+      "change": ""
+    },
+    {
+      "question": "Frais engagés et montant remboursé par bénéficiaire",
+      "before": "exact",
+      "after": "exact",
+      "before_seconds": 18.55,
+      "after_seconds": 13.1,
+      "runs": [
+        "exact"
+      ],
+      "unstable": false,
+      "change": ""
+    },
+    {
+      "question": "Montant des primes de scolarité par année",
+      "before": "exact",
+      "after": "exact",
+      "before_seconds": 7.65,
+      "after_seconds": 7.5,
+      "runs": [
+        "exact"
+      ],
+      "unstable": false,
+      "change": ""
+    },
+    {
+      "question": "Nombre d'agents par tranche d'endettement à la dernière simulation",
+      "before": "exact",
+      "after": "exact",
+      "before_seconds": 11.350000000000001,
+      "after_seconds": 8.4,
+      "runs": [
+        "exact"
+      ],
+      "unstable": false,
+      "change": ""
+    },
+    {
+      "question": "Nombre d'attestations éditées par modèle",
+      "before": "différent",
+      "after": "différent",
+      "before_seconds": 7.65,
+      "after_seconds": 12.5,
+      "runs": [
+        "différent"
+      ],
+      "unstable": false,
+      "change": ""
+    },
+    {
+      "question": "Délai moyen de réponse aux demandes par type",
+      "before": "exact",
+      "after": "exact",
+      "before_seconds": 5.2,
+      "after_seconds": 7.0,
+      "runs": [
+        "exact"
+      ],
+      "unstable": false,
+      "change": ""
+    }
+  ]
+}

@@ -25,6 +25,7 @@ import os
 
 from celery.schedules import crontab
 from flask_caching.backends.filesystemcache import FileSystemCache
+from grh_sql_chat import grh_sql_chat_bp, init_app as init_grh_sql_chat
 
 logger = logging.getLogger()
 
@@ -662,6 +663,9 @@ LANGUAGES = {
 }
 
 
+BLUEPRINTS = [grh_sql_chat_bp]
+
+
 def FLASK_APP_MUTATOR(app):  # noqa: N802
     # FAB's /lang/<locale> redirects using its session "page_history", which is
     # only filled by classic FAB views (e.g. /users/list/), not by React pages.
@@ -685,6 +689,10 @@ def FLASK_APP_MUTATOR(app):  # noqa: N802
 
     if "LocaleView.index" in app.view_functions:
         app.view_functions["LocaleView.index"] = change_locale
+
+    init_grh_sql_chat(app)
+
+
 ALERT_REPORTS_NOTIFICATION_DRY_RUN = True
 WEBDRIVER_BASEURL = "http://superset:8088/"  # When using docker compose baseurl should be http://superset_app:8088/
 # The base URL for the email report hyperlinks.

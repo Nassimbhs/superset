@@ -1,6 +1,7 @@
 SELECT
     n.cod_soc,
     n.mat_pers,
+    e.nom_prenom,
     e.sexe,
     e.pole,
     e.direction,

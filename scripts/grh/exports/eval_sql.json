@@ -1,0 +1,558 @@
+{
+  "model": "qwen2.5-coder:1.5b",
+  "date": "2026-10-12",
+  "runs": 1,
+  "questions": 30,
+  "exact": 29,
+  "different": 1,
+  "refused": 0,
+  "errors": 0,
+  "retried": 2,
+  "accuracy": 0.967,
+  "median_seconds": 12.45,
+  "p90_seconds": 21.7,
+  "median_first_run_seconds": 12.45,
+  "unstable": 0,
+  "results": [
+    {
+      "dashboard": "synthese",
+      "question": "Nombre d'entrées et de sorties en 2025",
+      "reference": "SELECT SUM(ENTREE) AS ENTREES, SUM(SORTIE) AS SORTIES FROM v_grh_effectif_mensuel WHERE ANNEE = '2025'",
+      "reference_rows": 1,
+      "sql": "SELECT SUM(ENTREE) AS ENTREES, SUM(SORTIE) AS SORTIES FROM v_grh_effectif_mensuel WHERE ANNEE = '2025'\nFETCH FIRST 200 ROWS ONLY",
+      "rows": 1,
+      "retried": false,
+      "status": "exact",
+      "seconds": 14.4,
+      "runs": [
+        "exact"
+      ],
+      "run_seconds": [
+        14.4
+      ],
+      "unstable": false
+    },
+    {
+      "dashboard": "synthese",
+      "question": "Jours d'absence par nature d'absence sur les 12 derniers mois",
+      "reference": "SELECT NATURE_ABSENCE, SUM(JOURS_ABSENCE) AS JOURS FROM v_grh_absenteisme_global WHERE DOUZE_MOIS = 1 GROUP BY NATURE_ABSENCE",
+      "reference_rows": 5,
+      "sql": "SELECT NATURE_ABSENCE, SUM(JOURS_ABSENCE) AS JOURS_ABSENCE FROM v_grh_absenteisme_global WHERE DOUZE_MOIS = 1 GROUP BY NATURE_ABSENCE ORDER BY JOURS_ABSENCE DESC\nFETCH FIRST 200 ROWS ONLY",
+      "rows": 5,
+      "retried": false,
+      "status": "exact",
+      "seconds": 21.5,
+      "runs": [
+        "exact"
+      ],
+      "run_seconds": [
+        21.5
+      ],
+      "unstable": false
+    },
+    {
+      "dashboard": "effectif",
+      "question": "Nombre d'agents actifs par sexe",
+      "reference": "SELECT SEXE, COUNT(DISTINCT MAT_PERS) AS EFFECTIF FROM v_effectif_grh WHERE EST_ACTIF = 1 GROUP BY SEXE",
+      "reference_rows": 2,
+      "sql": "SELECT SEXE, COUNT(DISTINCT MAT_PERS) AS EFFECTIF FROM v_effectif_grh WHERE EST_ACTIF = 1 GROUP BY SEXE ORDER BY EFFECTIF DESC\nFETCH FIRST 200 ROWS ONLY",
+      "rows": 2,
+      "retried": false,
+      "status": "exact",
+      "seconds": 20.9,
+      "runs": [
+        "exact"
+      ],
+      "run_seconds": [
+        20.9
+      ],
+      "unstable": false
+    },
+    {
+      "dashboard": "effectif",
+      "question": "Âge moyen des agents actifs par catégorie",
+      "reference": "SELECT CATEGORIE, AVG(AGE) AS AGE_MOYEN FROM v_effectif_grh WHERE EST_ACTIF = 1 GROUP BY CATEGORIE",
+      "reference_rows": 5,
+      "sql": "SELECT CATEGORIE, AVG(AGE) AS AGE_M_moyen FROM v_effectif_grh WHERE EST_ACTIF = 1 GROUP BY CATEGORIE ORDER BY AGE_M_moyen DESC\nFETCH FIRST 200 ROWS ONLY",
+      "rows": 5,
+      "retried": false,
+      "status": "exact",
+      "seconds": 29.2,
+      "runs": [
+        "exact"
+      ],
+      "run_seconds": [
+        29.2
+      ],
+      "unstable": false
+    },
+    {
+      "dashboard": "effectif",
+      "question": "Nombre d'agents actifs par tranche d'âge",
+      "reference": "SELECT TRANCHE_AGE, COUNT(DISTINCT MAT_PERS) AS EFFECTIF FROM v_effectif_grh WHERE EST_ACTIF = 1 GROUP BY TRANCHE_AGE",
+      "reference_rows": 5,
+      "sql": "SELECT TRANCHE_AGE, COUNT(DISTINCT MAT_PERS) AS EFFECTIF FROM v_effectif_grh WHERE EST_ACTIF = 1 GROUP BY TRANCHE_AGE ORDER BY EFFECTIF DESC\nFETCH FIRST 200 ROWS ONLY",
+      "rows": 5,
+      "retried": false,
+      "status": "exact",
+      "seconds": 5.2,
+      "runs": [
+        "exact"
+      ],
+      "run_seconds": [
+        5.2
+      ],
+      "unstable": false
+    },
+    {
+      "dashboard": "conges",
+      "question": "Jours de congé annuel pris en 2025 par direction",
+      "reference": "SELECT DIRECTION, SUM(NBR_JOURS) AS JOURS FROM v_grh_conges WHERE ANNEE = '2025' AND TYPE_CONGE = 'Congé annuel' GROUP BY DIRECTION",
+      "reference_rows": 29,
+      "sql": "SELECT DIRECTION, SUM(NBR_JOURS) AS JOURS_CONGE FROM v_grh_conges WHERE TYPE_CONGE = 'Congé annuel' AND ANNEE = '2025' GROUP BY DIRECTION ORDER BY JOURS_CONGE DESC\nFETCH FIRST 200 ROWS ONLY",
+      "rows": 29,
+      "retried": false,
+      "status": "exact",
+      "seconds": 19.8,
+      "runs": [
+        "exact"
+      ],
+      "run_seconds": [
+        19.8
+      ],
+      "unstable": false
+    },
+    {
+      "dashboard": "conges",
+      "question": "Combien d'agents sont en congé en ce moment ?",
+      "reference": "SELECT COUNT(DISTINCT MAT_PERS) AS AGENTS FROM v_grh_conges WHERE EN_COURS = 1",
+      "reference_rows": 1,
+      "sql": "SELECT COUNT(*) FROM v_grh_conges WHERE EN_COURS = 1\nFETCH FIRST 200 ROWS ONLY",
+      "rows": 1,
+      "retried": false,
+      "status": "exact",
+      "seconds": 12.2,
+      "runs": [
+        "exact"
+      ],
+      "run_seconds": [
+        12.2
+      ],
+      "unstable": false
+    },
+    {
+      "dashboard": "formation",
+      "question": "Nombre d'actions de formation par année",
+      "reference": "SELECT ANNEE, COUNT(DISTINCT NUM_ACTION) AS ACTIONS FROM v_grh_formation_actions GROUP BY ANNEE",
+      "reference_rows": 12,
+      "sql": "SELECT ANNEE_ACTION AS ANNEE, COUNT(*) AS NOMBRE_DE_ACTIONS FROM v_grh_formation_actions GROUP BY ANNEE_ACTION FETCH FIRST 200 ROWS ONLY",
+      "rows": 12,
+      "retried": false,
+      "status": "exact",
+      "seconds": 6.6,
+      "runs": [
+        "exact"
+      ],
+      "run_seconds": [
+        6.6
+      ],
+      "unstable": false
+    },
+    {
+      "dashboard": "formation",
+      "question": "Heures de formation par sexe",
+      "reference": "SELECT SEXE, SUM(HEURES) AS HEURES FROM v_grh_formation_participants GROUP BY SEXE",
+      "reference_rows": 2,
+      "sql": "SELECT SEXE, SUM(HEURES) AS HEURES FROM v_grh_formation_participants GROUP BY SEXE ORDER BY HEURES DESC\nFETCH FIRST 200 ROWS ONLY",
+      "rows": 2,
+      "retried": false,
+      "status": "exact",
+      "seconds": 7.6,
+      "runs": [
+        "exact"
+      ],
+      "run_seconds": [
+        7.6
+      ],
+      "unstable": false
+    },
+    {
+      "dashboard": "departs",
+      "question": "Âge moyen au départ par type de départ",
+      "reference": "SELECT TYPE_DEPART, AVG(AGE_DEPART) AS AGE_MOYEN FROM v_grh_departs GROUP BY TYPE_DEPART",
+      "reference_rows": 9,
+      "sql": "SELECT TYPE_DEPART, AVG(AGE_DEPART) AS AGE_M_moyen FROM v_grh_departs GROUP BY TYPE_DEPART ORDER BY AGE_M_moyen DESC\nFETCH FIRST 200 ROWS ONLY",
+      "rows": 9,
+      "retried": false,
+      "status": "exact",
+      "seconds": 28.1,
+      "runs": [
+        "exact"
+      ],
+      "run_seconds": [
+        28.1
+      ],
+      "unstable": false
+    },
+    {
+      "dashboard": "departs",
+      "question": "Combien d'agents partent à la retraite en 2026 ?",
+      "reference": "SELECT COUNT(DISTINCT MAT_PERS) AS AGENTS FROM v_grh_retraites WHERE ANNEE_RETRAITE = '2026'",
+      "reference_rows": 1,
+      "sql": "SELECT COUNT(*) FROM v_grh_retraites WHERE ANNEE_RETRAITE = '2026'\nFETCH FIRST 200 ROWS ONLY",
+      "rows": 1,
+      "retried": false,
+      "status": "exact",
+      "seconds": 7.0,
+      "runs": [
+        "exact"
+      ],
+      "run_seconds": [
+        7.0
+      ],
+      "unstable": false
+    },
+    {
+      "dashboard": "prets",
+      "question": "Nombre de prêts par groupe de prêt",
+      "reference": "SELECT GROUPE_PRET, COUNT(*) AS PRETS FROM v_grh_prets GROUP BY GROUPE_PRET",
+      "reference_rows": 8,
+      "sql": "SELECT GROUPE_PRET, COUNT(*) AS PRÊTS FROM v_grh_prets GROUP BY GROUPE_PRET ORDER BY PRÊTS DESC\nFETCH FIRST 200 ROWS ONLY",
+      "rows": 8,
+      "retried": false,
+      "status": "exact",
+      "seconds": 9.6,
+      "runs": [
+        "exact"
+      ],
+      "run_seconds": [
+        9.6
+      ],
+      "unstable": false
+    },
+    {
+      "dashboard": "prets",
+      "question": "Montant accordé des prêts en cours par direction",
+      "reference": "SELECT DIRECTION, SUM(MNT_ACCORDE) AS MONTANT FROM v_grh_prets WHERE EN_COURS = 1 GROUP BY DIRECTION",
+      "reference_rows": 31,
+      "sql": "SELECT DIRECTION, SUM(MNT_ACCORDE) AS MONTANT_ACCORDE FROM v_grh_prets WHERE EN_COURS = 1 GROUP BY DIRECTION ORDER BY MONTANT_ACCORDE DESC\nFETCH FIRST 200 ROWS ONLY",
+      "rows": 31,
+      "retried": false,
+      "status": "exact",
+      "seconds": 13.9,
+      "runs": [
+        "exact"
+      ],
+      "run_seconds": [
+        13.9
+      ],
+      "unstable": false
+    },
+    {
+      "dashboard": "mobilite",
+      "question": "Nombre de mutations par raison",
+      "reference": "SELECT RAISON, COUNT(*) AS MUTATIONS FROM v_grh_mutations GROUP BY RAISON",
+      "reference_rows": 11,
+      "sql": "SELECT COUNT(*) AS NOMBRE_MUTATIONS, RAISON FROM v_grh_mutations GROUP BY RAISON FETCH FIRST 200 ROWS ONLY",
+      "rows": 11,
+      "retried": false,
+      "status": "exact",
+      "seconds": 14.1,
+      "runs": [
+        "exact"
+      ],
+      "run_seconds": [
+        14.1
+      ],
+      "unstable": false
+    },
+    {
+      "dashboard": "mobilite",
+      "question": "Nombre de promotions par année",
+      "reference": "SELECT ANNEE, COUNT(*) AS PROMOTIONS FROM v_grh_promotions GROUP BY ANNEE",
+      "reference_rows": 13,
+      "sql": "SELECT \n  ANNEE,\n  COUNT(*) AS NOMBRE_DE_PROMO\nFROM \n  v_grh_promotions\nGROUP BY \n  ANNEE\nORDER BY \n  ANNEE\nFETCH FIRST 200 ROWS ONLY",
+      "rows": 13,
+      "retried": true,
+      "status": "exact",
+      "seconds": 10.1,
+      "runs": [
+        "exact"
+      ],
+      "run_seconds": [
+        10.1
+      ],
+      "unstable": false
+    },
+    {
+      "dashboard": "recrutement",
+      "question": "Nombre de candidats par sexe",
+      "reference": "SELECT SEXE, COUNT(*) AS CANDIDATS FROM v_grh_candidats GROUP BY SEXE",
+      "reference_rows": 2,
+      "sql": "SELECT SEXE, COUNT(*) AS CANDIDATS FROM v_grh_candidats GROUP BY SEXE ORDER BY CANDIDATS DESC\nFETCH FIRST 200 ROWS ONLY",
+      "rows": 2,
+      "retried": false,
+      "status": "exact",
+      "seconds": 10.9,
+      "runs": [
+        "exact"
+      ],
+      "run_seconds": [
+        10.9
+      ],
+      "unstable": false
+    },
+    {
+      "dashboard": "recrutement",
+      "question": "Recrutements par nature de recrutement",
+      "reference": "SELECT NATURE_RECRUTEMENT, COUNT(DISTINCT MAT_PERS) AS RECRUTEMENTS FROM v_grh_recrutements GROUP BY NATURE_RECRUTEMENT",
+      "reference_rows": 3,
+      "sql": "SELECT NATURE_RECRUTEMENT, COUNT(*) AS RECRUTEMENTS FROM v_grh_recrutements GROUP BY NATURE_RECRUTEMENT ORDER BY RECRUTEMENTS DESC\nFETCH FIRST 200 ROWS ONLY",
+      "rows": 3,
+      "retried": false,
+      "status": "exact",
+      "seconds": 10.0,
+      "runs": [
+        "exact"
+      ],
+      "run_seconds": [
+        10.0
+      ],
+      "unstable": false
+    },
+    {
+      "dashboard": "sante",
+      "question": "Jours de maladie par nature d'absence en 2025",
+      "reference": "SELECT NATURE_ABSENCE, SUM(NBR_JOURS) AS JOURS FROM v_grh_absences_maladie WHERE ANNEE = '2025' GROUP BY NATURE_ABSENCE",
+      "reference_rows": 3,
+      "sql": "SELECT NATURE_ABSENCE, SUM(NBR_JOURS) AS JOURS_MALADIE FROM v_grh_absences_maladie WHERE ANNEE = '2025' GROUP BY NATURE_ABSENCE ORDER BY JOURS_MALADIE DESC\nFETCH FIRST 200 ROWS ONLY",
+      "rows": 3,
+      "retried": false,
+      "status": "exact",
+      "seconds": 17.7,
+      "runs": [
+        "exact"
+      ],
+      "run_seconds": [
+        17.7
+      ],
+      "unstable": false
+    },
+    {
+      "dashboard": "sante",
+      "question": "Nombre de demandes d'indemnités maladie par situation",
+      "reference": "SELECT SITUATION, COUNT(*) AS DEMANDES FROM v_grh_indemnites_maladie GROUP BY SITUATION",
+      "reference_rows": 3,
+      "sql": "SELECT COUNT(*) AS NOMBRE_DE_DRAFES, SITUATION FROM v_grh_indemnites_maladie GROUP BY SITUATION\nFETCH FIRST 200 ROWS ONLY",
+      "rows": 3,
+      "retried": false,
+      "status": "exact",
+      "seconds": 11.7,
+      "runs": [
+        "exact"
+      ],
+      "run_seconds": [
+        11.7
+      ],
+      "unstable": false
+    },
+    {
+      "dashboard": "salaires",
+      "question": "Coût employeur total en 2025",
+      "reference": "SELECT SUM(COUT_EMPLOYEUR) AS COUT FROM v_grh_paie WHERE ANNEE = '2025' AND COD_TYP_BUL = 'BN'",
+      "reference_rows": 1,
+      "sql": "SELECT SUM(COUT_EMPLOYEUR) AS COUST_EMPLOYEUR_TOTAL FROM v_grh_effectif_mensuel WHERE ANNEE = '2025'\nFETCH FIRST 200 ROWS ONLY",
+      "rows": 1,
+      "retried": false,
+      "status": "exact",
+      "seconds": 21.7,
+      "runs": [
+        "exact"
+      ],
+      "run_seconds": [
+        21.7
+      ],
+      "unstable": false
+    },
+    {
+      "dashboard": "salaires",
+      "question": "Net à payer moyen par sexe le dernier mois",
+      "reference": "SELECT SEXE, AVG(NET_A_PAYER) AS NET_MOYEN FROM v_grh_paie WHERE DERNIER_MOIS = 1 AND COD_TYP_BUL = 'BN' GROUP BY SEXE",
+      "reference_rows": 2,
+      "sql": "SELECT SEXE, ROUND(AVG(NET_A_PAYER)) AS NET_MOYEN FROM v_grh_paie WHERE DERNIER_MOIS = 1 AND COD_TYP_BUL = 'BN' GROUP BY SEXE ORDER BY NET_MOYEN DESC\nFETCH FIRST 200 ROWS ONLY",
+      "rows": 2,
+      "retried": false,
+      "status": "exact",
+      "seconds": 16.1,
+      "runs": [
+        "exact"
+      ],
+      "run_seconds": [
+        16.1
+      ],
+      "unstable": false
+    },
+    {
+      "dashboard": "presence",
+      "question": "Nombre de retards par jour de la semaine en 2026",
+      "reference": "SELECT JOUR_SEMAINE, COUNT(*) AS RETARDS FROM v_grh_retards WHERE ANNEE = '2026' GROUP BY JOUR_SEMAINE",
+      "reference_rows": 5,
+      "sql": "SELECT JOUR_SEMAINE, COUNT(*) AS RETARDS FROM v_grh_retards WHERE ANNEE = '2026' GROUP BY JOUR_SEMAINE ORDER BY RETARDS DESC\nFETCH FIRST 200 ROWS ONLY",
+      "rows": 5,
+      "retried": false,
+      "status": "exact",
+      "seconds": 14.1,
+      "runs": [
+        "exact"
+      ],
+      "run_seconds": [
+        14.1
+      ],
+      "unstable": false
+    },
+    {
+      "dashboard": "presence",
+      "question": "Minutes de sortie autorisée par direction en 2025",
+      "reference": "SELECT DIRECTION, SUM(MINUTES_SORTIE) AS MINUTES FROM v_grh_autorisations_sortie WHERE ANNEE = '2025' GROUP BY DIRECTION",
+      "reference_rows": 29,
+      "sql": "SELECT DIRECTION, SUM(MINUTES_SORTIE) AS MINUTES_SORTIE FROM v_grh_autorisations_sortie WHERE ANNEE = '2025' GROUP BY DIRECTION ORDER BY MINUTES_SORTIE DESC\nFETCH FIRST 200 ROWS ONLY",
+      "rows": 29,
+      "retried": false,
+      "status": "exact",
+      "seconds": 14.2,
+      "runs": [
+        "exact"
+      ],
+      "run_seconds": [
+        14.2
+      ],
+      "unstable": false
+    },
+    {
+      "dashboard": "budget",
+      "question": "Budget total et réalisé en 2025",
+      "reference": "SELECT SUM(BUDGET) AS BUDGET, SUM(REALISE) AS REALISE FROM v_grh_budget WHERE ANNEE = 2025",
+      "reference_rows": 1,
+      "sql": "SELECT SUM(BUDGET) AS BUDGET_TOTAL, SUM(REALISE) AS REALISE_TOTAL FROM v_grh_budget WHERE ANNEE = 2025\nFETCH FIRST 200 ROWS ONLY",
+      "rows": 1,
+      "retried": false,
+      "status": "exact",
+      "seconds": 5.5,
+      "runs": [
+        "exact"
+      ],
+      "run_seconds": [
+        5.5
+      ],
+      "unstable": false
+    },
+    {
+      "dashboard": "rendement",
+      "question": "Nombre d'agents par tranche de note la dernière année",
+      "reference": "SELECT TRANCHE_NOTE, COUNT(DISTINCT MAT_PERS) AS AGENTS FROM v_grh_notes_rendement WHERE DERNIERE_ANNEE = 1 GROUP BY TRANCHE_NOTE",
+      "reference_rows": 5,
+      "sql": "SELECT TRANCHE_NOTE, COUNT(*) AS NB_AGENT FROM v_grh_notes_rendement WHERE DERNIERE_ANNEE = 1 GROUP BY TRANCHE_NOTE ORDER BY NB_AGENT DESC\nFETCH FIRST 200 ROWS ONLY",
+      "rows": 5,
+      "retried": false,
+      "status": "exact",
+      "seconds": 12.4,
+      "runs": [
+        "exact"
+      ],
+      "run_seconds": [
+        12.4
+      ],
+      "unstable": false
+    },
+    {
+      "dashboard": "soins",
+      "question": "Frais engagés et montant remboursé par bénéficiaire",
+      "reference": "SELECT BENEFICIAIRE, SUM(FRAIS_ENGAGES) AS FRAIS, SUM(MONTANT_REMBOURSE) AS REMBOURSE FROM v_grh_soins GROUP BY BENEFICIAIRE",
+      "reference_rows": 3,
+      "sql": "SELECT BENEFICIAIRE, SUM(FRAIS_ENGAGES) AS FRAIS_ENGAGES, SUM(MONTANT_REMBOURSE) AS MONTANT_REMBOURSE FROM v_grh_soins GROUP BY BENEFICIAIRE ORDER BY BENEFICIAIRE\nFETCH FIRST 200 ROWS ONLY",
+      "rows": 3,
+      "retried": false,
+      "status": "exact",
+      "seconds": 13.1,
+      "runs": [
+        "exact"
+      ],
+      "run_seconds": [
+        13.1
+      ],
+      "unstable": false
+    },
+    {
+      "dashboard": "social",
+      "question": "Montant des primes de scolarité par année",
+      "reference": "SELECT ANNEE, SUM(MONTANT_PRIME) AS MONTANT FROM v_grh_scolarite GROUP BY ANNEE",
+      "reference_rows": 12,
+      "sql": "SELECT ANNEE, SUM(MONTANT_PRIME) AS TOTAL_MONTANT_PRIME FROM v_grh_scolarite GROUP BY ANNEE ORDER BY ANNEE FETCH FIRST 200 ROWS ONLY",
+      "rows": 12,
+      "retried": false,
+      "status": "exact",
+      "seconds": 7.5,
+      "runs": [
+        "exact"
+      ],
+      "run_seconds": [
+        7.5
+      ],
+      "unstable": false
+    },
+    {
+      "dashboard": "endettement",
+      "question": "Nombre d'agents par tranche d'endettement à la dernière simulation",
+      "reference": "SELECT TRANCHE_ENDETTEMENT, COUNT(DISTINCT MAT_PERS) AS AGENTS FROM v_grh_capacite WHERE DERNIERE_SIMULATION = 1 GROUP BY TRANCHE_ENDETTEMENT",
+      "reference_rows": 6,
+      "sql": "SELECT TRANCHE_ENDETTEMENT, COUNT(*) FROM v_grh_capacite WHERE DERNIERE_SIMULATION = 1 GROUP BY TRANCHE_ENDETTEMENT ORDER BY TRANCHE_ENDETTEMENT\nFETCH FIRST 200 ROWS ONLY",
+      "rows": 6,
+      "retried": false,
+      "status": "exact",
+      "seconds": 8.4,
+      "runs": [
+        "exact"
+      ],
+      "run_seconds": [
+        8.4
+      ],
+      "unstable": false
+    },
+    {
+      "dashboard": "services",
+      "question": "Nombre d'attestations éditées par modèle",
+      "reference": "SELECT MODELE_ATTESTATION, COUNT(*) AS ATTESTATIONS FROM v_grh_attestations GROUP BY MODELE_ATTESTATION",
+      "reference_rows": 7,
+      "sql": "SELECT MODELE_ATTESTATION, COUNT(*) AS nombre_attestations_editees_par_modele\nFROM v_grh_attestations\nWHERE MODELE_ATTESTATION = 'Modèle n°1'\nGROUP BY MODELE_ATTESTATION\nFETCH FIRST 200 ROWS ONLY",
+      "rows": 1,
+      "retried": true,
+      "status": "différent",
+      "seconds": 12.5,
+      "runs": [
+        "différent"
+      ],
+      "run_seconds": [
+        12.5
+      ],
+      "unstable": false
+    },
+    {
+      "dashboard": "services",
+      "question": "Délai moyen de réponse aux demandes par type",
+      "reference": "SELECT TYPE_DEMANDE, AVG(DELAI_REPONSE) AS DELAI FROM v_grh_demandes_service GROUP BY TYPE_DEMANDE",
+      "reference_rows": 4,
+      "sql": "SELECT TYPE_DEMANDE, ROUND(AVG(DELAI_REPONSE), 1) AS DELAI_MOYEN FROM v_grh_demandes_service GROUP BY TYPE_DEMANDE ORDER BY DELAI_MOYEN DESC\nFETCH FIRST 200 ROWS ONLY",
+      "rows": 4,
+      "retried": false,
+      "status": "exact",
+      "seconds": 7.0,
+      "runs": [
+        "exact"
+      ],
+      "run_seconds": [
+        7.0
+      ],
+      "unstable": false
+    }
+  ]
+}

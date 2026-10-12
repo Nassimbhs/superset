@@ -1,7 +1,9 @@
-"""Generate a Word document describing every GRH dashboard from its spec:
-dashboards summary, all metric formulas, datasets and one chart table per dashboard.
+"""Generate the client Word document describing every GRH dashboard from its spec:
+dashboards summary with public URLs, calculation rules in plain language, one chart
+table and one filter table per dashboard. No database detail (tables, columns, SQL).
 
 Usage: python export_doc.py [--out exports/Documentation_Dashboards_GRH.docx]
+                            [--base-url https://superset.client] [--cod-soc 01]
 Requires: pip install python-docx
 """
 from __future__ import annotations
@@ -9,9 +11,8 @@ from __future__ import annotations
 import argparse
 import importlib
 import json
-import re
-from datetime import datetime
 from pathlib import Path
+from urllib.parse import quote
 
 from docx import Document
 from docx.enum.section import WD_ORIENT
@@ -20,8 +21,7 @@ from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Cm, Pt, RGBColor
 
-import grh_builder
-from grh_builder import HERE, SUITE, TimeFilter, render_sql
+from grh_builder import HERE, SUITE, TimeFilter
 
 DEFAULT_OUT = HERE / "exports" / "Documentation_Dashboards_GRH.docx"
 
@@ -72,19 +72,19 @@ SIMPLE_FILTERS = {
     ("DOUZE_MOIS", 1): "12 derniers mois",
     ("DERNIER_MOIS", 1): "dernier mois de paie",
     ("EST_ACTIF", 1): "agents actifs",
-    ("COD_TYP_BUL", "BN"): "paie mensuelle (bulletins BN)",
+    ("COD_TYP_BUL", "BN"): "paie mensuelle",
     ("EN_COURS", 1): "en cours",
     ("DERNIERE_SIMULATION", 1): "dernière simulation",
     ("CHANGE_DIRECTION", 1): "changement de direction",
     ("DERNIERE_ANNEE", 1): "dernière année / campagne",
     ("ANNEE_PRECEDENTE", 1): "année / campagne précédente",
     ("ACCORDE", 1): "prêts accordés",
-    ("RUBRIQUE_PAIE", 1): "rubriques rattachées à la paie",
+    ("RUBRIQUE_PAIE", 1): "éléments de paie uniquement",
 }
 
 SQL_FILTERS = {
     "ANNEE = TO_CHAR(SYSDATE, 'YYYY')": "année en cours",
-    "NATURE_ABSENCE <> 'Jours théoriques'": "hors lignes de jours théoriques",
+    "NATURE_ABSENCE <> 'Jours théoriques'": "jours d'absence uniquement",
     "DT_BUL >= ADD_MONTHS(TRUNC(SYSDATE, 'MM'), -36)": "36 derniers mois",
     "DAT_DEM >= ADD_MONTHS(TRUNC(SYSDATE), -12)": "12 derniers mois",
     "DAT_DEBUT >= ADD_MONTHS(TRUNC(SYSDATE), -12) AND DAT_DEBUT <= TRUNC(SYSDATE)": "12 derniers mois",
@@ -124,25 +124,128 @@ COLUMN_WORDS = {
 OPERATORS = {"==": "=", "!=": "≠", ">": ">", "<": "<", ">=": "≥", "<=": "≤", "IN": "dans", "NOT IN": "hors"}
 
 CONVENTIONS = [
-    ("EST_ACTIF", "1 si l'agent est en activité (PERSONNEL.ETAT_ACT = '0')."),
-    ("DERNIER_12_MOIS / DOUZE_MOIS", "1 si la ligne tombe dans les 12 derniers mois (par rapport à la date du jour "
-                                    "ou au dernier mois de paie selon le dataset)."),
-    ("DERNIER_MOIS", "1 pour le dernier mois de paie mensuelle disponible."),
-    ("Pôle / Direction / Service", "Niveaux 2 et 3 de l'arborescence SERVICE (SER_COD_SERV) ; le service est "
-                                   "l'affectation réelle de l'agent."),
-    ("Effectif payé", "Agents distincts ayant un bulletin de paie mensuel (BULLETINH, COD_TYP_BUL = 'BN')."),
+    ("Agent actif", "Agent dont l'état de paie est « Actif »."),
+    ("12 derniers mois", "Période glissante des 12 derniers mois, par rapport à la date du jour ou au dernier mois "
+                         "de paie selon le tableau de bord."),
+    ("Dernier mois", "Dernier mois de paie mensuelle disponible."),
+    ("Pôle / Direction / Service", "Niveaux de l'organigramme : un pôle regroupe des directions, une direction "
+                                   "regroupe des services. Le service est l'affectation réelle de l'agent."),
+    ("Effectif payé", "Nombre d'agents distincts ayant reçu un bulletin de paie mensuel."),
+    ("Agent-mois", "Un agent payé au cours d'un mois donné (un agent payé 12 mois compte pour 12 agents-mois)."),
     ("Entrée", "Agent payé dans le mois sans l'avoir été le mois précédent."),
     ("Sortie", "Agent payé dans le mois sans l'être le mois suivant."),
-    ("REF_M12 / RETENU", "Agents payés 12 mois avant le dernier mois / parmi eux, ceux encore payés le dernier mois "
-                         "(taux de rétention = RETENU / REF_M12)."),
-    ("Turnover", "(entrées + sorties) / 2 / effectif moyen de la période."),
-    ("Responsable", "Agent ayant une fonction (FONCTION <> 'Sans fonction') : chef de service, chef d'agence, "
-                    "directeur, etc. Photo à la date du jour."),
-    ("Jours théoriques", "230 / 12 jours ouvrés par agent payé et par mois (230 jours par an)."),
-    ("Absentéisme toutes causes", "Congés maladie (type 02), exceptionnels (03) et sanctions (05), hors congé "
-                                  "annuel (01) et autres absences (08 : formation, mission, badge)."),
-    ("Coût employeur", "Brut (rubrique 50000) + charges patronales (rubriques 81%)."),
+    ("Taux de rétention", "Part des agents payés il y a 12 mois qui sont encore payés le dernier mois."),
+    ("Turnover", "(Entrées + sorties) / 2, divisé par l'effectif moyen mensuel de la période."),
+    ("Responsable", "Agent occupant une fonction de responsabilité : chef de service, chef d'agence, directeur, etc."),
+    ("Jours théoriques", "Jours ouvrés attendus : 230 jours par an, soit 230 / 12 par agent payé et par mois."),
+    ("Absentéisme toutes causes", "Congés de maladie (y compris maternité, hospitalisation, accident de travail), "
+                                  "congés exceptionnels et mises à pied ; hors congé annuel, formations et missions."),
+    ("Coût employeur", "Salaire brut + charges patronales (cotisations à la charge de l'employeur)."),
+    ("Filtres", "Les filtres d'un dashboard s'appliquent à tous ses graphiques sauf mention contraire. Le filtre "
+                "Direction ne propose que les directions du pôle sélectionné."),
 ]
+
+RULES = {
+    ("synthese", "effectif"): "Nombre d'agents distincts ayant reçu une paie mensuelle",
+    ("synthese", "entrees"): "Nombre d'agents payés dans le mois qui ne l'étaient pas le mois précédent",
+    ("synthese", "sorties"): "Nombre d'agents payés dans le mois qui ne le sont plus le mois suivant",
+    ("synthese", "turnover"): "(Entrées + Sorties) / 2, divisé par l'effectif moyen mensuel de la période",
+    ("synthese", "retention"): "Agents payés il y a 12 mois et encore payés le dernier mois / agents payés il y a "
+                               "12 mois",
+    ("synthese", "taux_encadrement"): "Nombre de responsables / effectif payé",
+    ("synthese", "responsables"): "Nombre d'agents occupant une fonction de responsabilité (chef de service, chef "
+                                  "d'agence, directeur…)",
+    ("synthese", "pct_femmes_resp"): "Femmes responsables / total des responsables",
+    ("synthese", "masse_brute"): "Somme des salaires bruts mensuels",
+    ("synthese", "cout_employeur"): "Salaire brut + charges patronales",
+    ("synthese", "cout_moyen"): "Coût employeur total / nombre d'agents-mois payés",
+    ("synthese", "jours_absence"): "Somme des jours d'absence : maladie, maternité, hospitalisation, accident de "
+                                   "travail, congés exceptionnels et mises à pied",
+    ("synthese", "taux_absenteisme"): "Jours d'absence / jours ouvrés théoriques (230 jours par an et par agent payé)",
+    ("effectif", "effectif"): "Nombre d'agents distincts",
+    ("effectif", "pct_femmes"): "Nombre de femmes / effectif",
+    ("effectif", "age_moyen"): "Moyenne de l'âge des agents (en années)",
+    ("effectif", "anciennete_moy"): "Moyenne de l'ancienneté des agents depuis leur embauche (en années)",
+    ("effectif", "recrut_annee"): "Nombre d'agents embauchés pendant l'année civile en cours",
+    ("effectif", "departs_annee"): "Nombre d'agents partis pendant l'année civile en cours",
+    ("conges", "jours"): "Somme des jours de congé et d'absence demandés",
+    ("conges", "duree_moy"): "Moyenne du nombre de jours par demande",
+    ("conges", "solde_moy"): "Moyenne du solde de congé restant par agent (en jours)",
+    ("conges", "absents_jour"): "Nombre d'agents dont le congé couvre la date du jour",
+    ("formation", "heures"): "Somme des heures des actions de formation",
+    ("formation", "cout"): "Somme des coûts TTC des actions de formation (en dinars)",
+    ("formation", "cout_moyen"): "Coût total des formations / nombre d'actions",
+    ("formation", "participants"): "Somme du nombre de participants de chaque action",
+    ("formation", "heures_stagiaire"): "Somme des heures de formation suivies par les participants",
+    ("departs", "taux_rotation"): "Départs des 12 derniers mois / effectif actif",
+    ("departs", "age_moyen_depart"): "Moyenne de l'âge des agents à leur date de départ",
+    ("departs", "retraites"): "Nombre d'agents qui atteindront l'âge de la retraite dans l'horizon indiqué",
+    ("prets", "mnt_demande"): "Somme des montants demandés (en dinars)",
+    ("prets", "mnt_accorde"): "Somme des montants accordés (en dinars)",
+    ("prets", "taux_accord"): "Demandes accordées / total des demandes",
+    ("prets", "mnt_moyen"): "Moyenne des montants accordés (en dinars)",
+    ("prets", "prets_en_cours"): "Nombre de prêts dont le remboursement n'est pas terminé",
+    ("prets", "mensualites"): "Somme des mensualités des prêts en cours de remboursement",
+    ("mobilite", "pct_inter_direction"): "Mutations avec changement de direction / total des mutations",
+    ("recrutement", "candidats"): "Nombre de candidatures distinctes",
+    ("recrutement", "taux_recrutement"): "Candidats recrutés / total des candidats",
+    ("recrutement", "part_femmes"): "Nombre de femmes / total",
+    ("recrutement", "age_moyen_recrutement"): "Moyenne de l'âge des agents à leur date d'embauche",
+    ("sante", "jours_maladie"): "Somme des jours d'arrêt",
+    ("sante", "duree_moyenne"): "Moyenne du nombre de jours par arrêt",
+    ("sante", "taux_absenteisme"): "Jours d'arrêt maladie / (effectif actif × 230 jours ouvrés par an)",
+    ("sante", "demandes_ind"): "Nombre de demandes d'indemnités distinctes",
+    ("sante", "jours_ind"): "Somme des jours indemnisés",
+    ("salaires", "masse_brute"): "Somme des salaires bruts",
+    ("salaires", "cout_employeur"): "Salaire brut + charges patronales",
+    ("salaires", "charges_patronales"): "Somme des cotisations à la charge de l'employeur",
+    ("salaires", "net_a_payer"): "Somme des nets à payer",
+    ("salaires", "salaire_base"): "Somme des salaires de base",
+    ("salaires", "indemnites_mensuelles"): "Somme des primes et indemnités mensuelles",
+    ("salaires", "retenues_salariales"): "Somme des cotisations sociales retenues sur les salaires",
+    ("salaires", "impot"): "Somme de l'impôt sur le revenu et de la contribution sociale de solidarité retenus",
+    ("salaires", "salaire_moyen"): "Masse salariale brute / nombre d'agents-mois payés",
+    ("salaires", "net_moyen"): "Total des nets à payer / nombre d'agents-mois payés",
+    ("salaires", "taux_charges"): "Charges patronales / masse salariale brute",
+    ("presence", "minutes_retard"): "Somme des minutes de retard",
+    ("presence", "retard_moyen"): "Moyenne des minutes de retard par retard constaté",
+    ("presence", "heures_sortie"): "Somme des durées des autorisations de sortie (en heures)",
+    ("presence", "agents_pointes"): "Nombre d'agents distincts ayant au moins un pointage",
+    ("presence", "presence_moyenne"): "Moyenne des heures de présence par agent et par jour pointé",
+    ("presence", "arrivee_moyenne"): "Moyenne de l'heure du premier pointage de la journée",
+    ("budget", "budget"): "Somme des montants budgétés",
+    ("budget", "realise"): "Somme des montants réalisés en paie",
+    ("budget", "ecart"): "Réalisé − budget",
+    ("budget", "taux_realisation"): "Réalisé / budget",
+    ("rendement", "note_moyenne"): "Moyenne des notes de rendement définitives (sur 20)",
+    ("rendement", "part_excellence"): "Nombre de notes supérieures ou égales à 19 / total des notes",
+    ("rendement", "taux_promotion"): "Agents promus l'année suivant l'évaluation / agents notés",
+    ("rendement", "note_assiduite"): "Moyenne de la note d'assiduité",
+    ("rendement", "note_maladie"): "Moyenne de la note liée aux congés de maladie",
+    ("soins", "frais_engages"): "Somme des frais de soins engagés par les agents",
+    ("soins", "montant_rembourse"): "Somme des montants remboursés",
+    ("soins", "taux_remboursement"): "Montant remboursé / frais engagés",
+    ("soins", "delai_moyen"): "Moyenne du nombre de jours entre la date des soins et la réception du bulletin",
+    ("soins", "rembourse_actes"): "Somme des montants remboursés par acte",
+    ("soins", "frais_actes"): "Somme des frais engagés par acte",
+    ("social", "montant_accorde"): "Somme des montants accordés",
+    ("social", "montant_demande"): "Somme des montants demandés",
+    ("social", "taux_acceptation"): "Demandes accordées / total des demandes",
+    ("social", "don_moyen"): "Montant total accordé / nombre d'agents bénéficiaires",
+    ("social", "primes"): "Nombre de primes de scolarité versées (une par enfant)",
+    ("social", "montant_scolarite"): "Somme des primes de scolarité versées",
+    ("endettement", "cessions_en_cours"): "Nombre de cessions sur salaire non encore soldées",
+    ("endettement", "mensualites_en_cours"): "Somme des retenues mensuelles des cessions en cours",
+    ("endettement", "agents_cession"): "Nombre d'agents distincts ayant au moins une cession en cours",
+    ("endettement", "taux_moyen"): "Moyenne du taux d'endettement simulé après le nouveau prêt "
+                                   "(retenues / salaire)",
+    ("endettement", "taux_actuel_moyen"): "Moyenne du taux d'endettement avant le nouveau prêt (retenues / salaire)",
+    ("endettement", "agents_seuil"): "Nombre d'agents dont le taux d'endettement atteint ou dépasse 40 %",
+    ("services", "delai_moyen"): "Moyenne du nombre de jours entre la demande et la réponse",
+    ("services", "en_attente"): "Nombre de demandes à l'état « En attente »",
+    ("services", "jours_interim"): "Somme des jours d'intérim",
+    ("services", "remplacants"): "Nombre d'agents distincts ayant assuré un intérim",
+}
 
 
 # --------------------------------------------------------------------------- spec reading
@@ -171,7 +274,22 @@ def describe_filter(f: dict) -> str:
     known = SIMPLE_FILTERS.get((f["subject"], f["comparator"]))
     if known and f["operator"] == "==":
         return known
-    return f"{f['subject']} {OPERATORS.get(f['operator'], f['operator'])} {f['comparator']}"
+    return f"{col_label(f['subject'])} {OPERATORS.get(f['operator'], f['operator'])} {f['comparator']}"
+
+
+def with_de(text: str) -> str:
+    return f"d'{text}" if text[:1] in "aeiouéèêâh" else f"de {text}"
+
+
+def plain_rule(dashboard: str, metric) -> str | None:
+    if (dashboard, metric.name) in RULES:
+        return RULES[(dashboard, metric.name)]
+    expr = metric.expression.replace(" ", "").upper()
+    if expr == "COUNT(*)":
+        return f"Nombre {with_de(metric.verbose[:1].lower() + metric.verbose[1:])}"
+    if expr == "COUNT(DISTINCTMAT_PERS)":
+        return "Nombre d'agents distincts"
+    return None
 
 
 def chart_metrics(params: dict) -> list[str]:
@@ -249,17 +367,6 @@ def json_order(params: dict) -> str:
     return json.loads(order[0])[0] if order else ""
 
 
-def source_tables(sql: str) -> list[str]:
-    ctes = {m.lower() for m in re.findall(r"(?:WITH|,)\s*(\w+)\s+AS\s*\(", sql, re.I)}
-    tables = []
-    for name in re.findall(r"\b(?:FROM|JOIN)\s+([A-Za-z_][\w$#]*)\b(?!\.)", sql, re.I):
-        low = name.lower()
-        if low in ctes or low in {"select", "dual", "table", "lateral"} or low in tables:
-            continue
-        tables.append(low)
-    return [t.upper() for t in tables]
-
-
 class FakeIds(dict):
     def __missing__(self, key):
         return 0
@@ -269,9 +376,8 @@ def load_dashboards() -> list[dict]:
     result = []
     for key, label, slug in SUITE:
         spec = importlib.import_module(f"dashboards.{key}")
-        datasets = {ds.key: ds for ds in spec.DATASETS}
         metrics = {(ds.key, m.name): m for ds in spec.DATASETS for m in ds.metrics}
-        charts = spec.charts(FakeIds({k: 0 for k in datasets}))
+        charts = spec.charts(FakeIds())
         order = [k for row in spec.LAYOUT for k, *_ in row]
         order += [k for k in charts if k not in order]
         rows = []
@@ -284,10 +390,8 @@ def load_dashboards() -> list[dict]:
             rows.append({
                 "key": ck,
                 "name": chart.name,
-                "dataset": datasets[chart.dataset].name,
                 "type": chart_type(p),
                 "measures": measures,
-                "formulas": [metrics[(chart.dataset, n)].expression for n in names if (chart.dataset, n) in metrics],
                 "axes": chart_axes(p),
                 "filters": filters,
                 "meaning": chart_meaning(p, measures, filters),
@@ -295,23 +399,26 @@ def load_dashboards() -> list[dict]:
         filters = []
         for f in spec.FILTERS:
             if isinstance(f, TimeFilter):
-                filters.append({"label": f.label, "column": "Période (filtre de temps)",
-                                "scope": ", ".join(charts[c].name for c in f.charts if c in charts)})
+                filters.append({"label": f.label, "scope": "Période ; s'applique à : "
+                                + ", ".join(charts[c].name for c in f.charts if c in charts)})
             else:
                 note = "dépend du filtre Pôle" if f.column == "DIRECTION" and any(
                     getattr(o, "column", None) == "POLE" for o in spec.FILTERS) else ""
                 if f.exclude:
                     excl = ", ".join(charts[c].name for c in f.exclude if c in charts)
                     note = (note + " ; " if note else "") + f"sans effet sur : {excl}"
-                filters.append({"label": f.label, "column": f.column, "scope": note or "tous les graphiques concernés"})
+                filters.append({"label": f.label, "scope": note or "tous les graphiques concernés"})
+        rules = []
+        for m in (m for ds in spec.DATASETS for m in ds.metrics):
+            rule = plain_rule(key, m)
+            if rule is None:
+                print(f"  sans règle de calcul : {key}.{m.name} ({m.expression})")
+                rule = m.verbose
+            rules.append({"label": m.verbose, "rule": rule, "format": fmt_label(m.d3format)})
         result.append({
             "key": key, "label": label, "title": spec.TITLE, "slug": spec.SLUG,
             "description": DESCRIPTIONS.get(key, ""),
-            "datasets": [{
-                "name": ds.name, "sql_file": ds.sql_file, "date_col": ds.main_dttm_col or "",
-                "tables": source_tables(render_sql(ds.sql_file)),
-                "metrics": ds.metrics,
-            } for ds in spec.DATASETS],
+            "rules": rules,
             "charts": rows,
             "filters": filters,
         })
@@ -384,77 +491,73 @@ def add_table(doc: Document, headers: list[str], rows: list[list[str]], widths: 
 # --------------------------------------------------------------------------- document
 
 
-def build_document(dashboards: list[dict], out: Path) -> dict[str, int]:
+def public_url(base: str, slug: str, cod_soc: str) -> str:
+    url = f"{base.rstrip('/')}/superset/dashboard/{slug}/?standalone=1"
+    return f"{url}&cod_soc={quote(cod_soc)}" if cod_soc else url
+
+
+def build_document(dashboards: list[dict], out: Path, base_url: str, cod_soc: str) -> dict[str, int]:
     doc = Document()
     set_landscape(doc)
     doc.styles["Normal"].font.name = "Calibri"
     doc.styles["Normal"].font.size = Pt(10)
 
     n_charts = sum(len(d["charts"]) for d in dashboards)
-    n_metrics = sum(len(ds["metrics"]) for d in dashboards for ds in d["datasets"])
-    n_datasets = sum(len(d["datasets"]) for d in dashboards)
+    n_rules = sum(len(d["rules"]) for d in dashboards)
+    url = {d["key"]: public_url(base_url, d["slug"], cod_soc) for d in dashboards}
 
     doc.add_heading("Documentation des tableaux de bord GRH", 0)
-    doc.add_paragraph(f"Généré le {datetime.now():%d/%m/%Y à %H:%M} à partir des spécifications "
-                      f"scripts/grh/dashboards (Superset, base {grh_builder.DATABASE_NAME}).")
-    doc.add_paragraph(f"{len(dashboards)} dashboards · {n_datasets} datasets · {n_charts} graphiques · "
-                      f"{n_metrics} métriques (formules).")
 
     doc.add_heading("1. Récapitulatif des dashboards", 1)
-    add_table(doc, ["N°", "Dashboard", "Lien", "Objectif", "Datasets", "Graphiques", "Filtres disponibles"], [
-        [str(i), d["title"], f"/superset/dashboard/{d['slug']}/", d["description"], str(len(d["datasets"])),
-         str(len(d["charts"])), ", ".join(f["label"] for f in d["filters"])]
+    add_table(doc, ["N°", "Dashboard", "URL publique", "Objectif", "Graphiques", "Filtres disponibles"], [
+        [str(i), d["title"], url[d["key"]], d["description"], str(len(d["charts"])),
+         ", ".join(f["label"] for f in d["filters"])]
         for i, d in enumerate(dashboards, start=1)
-    ], [1, 3.5, 4.5, 8, 1.6, 1.8, 5.5])
+    ], [1, 3.5, 6.5, 8, 1.8, 5])
 
-    doc.add_heading("2. Formules : toutes les métriques", 1)
-    doc.add_paragraph("Chaque métrique est une expression SQL agrégée, évaluée par Superset sur le dataset, "
-                      "après application des filtres du graphique et du dashboard.")
-    add_table(doc, ["Dashboard", "Dataset", "Métrique", "Libellé", "Formule SQL", "Format"], [
-        [d["title"], ds["name"], m.name, m.verbose, m.expression, fmt_label(m.d3format)]
-        for d in dashboards for ds in d["datasets"] for m in ds["metrics"]
-    ], [3.2, 3.8, 3.2, 4.5, 9.5, 2.5], mono_cols={2, 4})
+    doc.add_heading("2. Règles de calcul des indicateurs", 1)
+    doc.add_paragraph("Chaque indicateur est recalculé à l'affichage, après application des filtres du "
+                      "dashboard et du périmètre propre au graphique.")
+    add_table(doc, ["Dashboard", "Indicateur", "Règle de calcul", "Format"], [
+        [d["title"], r["label"], r["rule"], r["format"]] for d in dashboards for r in d["rules"]
+    ], [4, 5.5, 13, 3.3])
 
-    doc.add_heading("3. Datasets et tables sources", 1)
-    add_table(doc, ["Dashboard", "Dataset Superset", "Fichier SQL", "Tables Oracle sources", "Colonne date"], [
-        [d["title"], ds["name"], f"sql/{ds['sql_file']}", ", ".join(ds["tables"]), ds["date_col"]]
-        for d in dashboards for ds in d["datasets"]
-    ], [3.5, 4.5, 4, 11, 3.2], mono_cols={1, 2})
-
-    doc.add_heading("4. Détail des graphiques par dashboard", 1)
+    doc.add_heading("3. Détail des graphiques par dashboard", 1)
     for i, d in enumerate(dashboards, start=1):
-        doc.add_heading(f"4.{i} {d['title']}", 2)
+        doc.add_heading(f"3.{i} {d['title']}", 2)
         p = doc.add_paragraph()
-        p.add_run("Lien : ").bold = True
-        p.add_run(f"/superset/dashboard/{d['slug']}/")
+        p.add_run("URL publique : ").bold = True
+        p.add_run(url[d["key"]])
         p = doc.add_paragraph()
         p.add_run("Objectif : ").bold = True
         p.add_run(d["description"])
-        add_table(doc, ["N°", "Graphique", "Type", "Mesure", "Axe / regroupement", "Filtres fixes",
+        add_table(doc, ["N°", "Graphique", "Type", "Mesure", "Axe / regroupement", "Périmètre",
                         "Ce que représente le graphique"], [
             [str(n), c["name"], c["type"], ", ".join(c["measures"]) or "Liste détaillée", c["axes"] or "—",
              ", ".join(c["filters"]) or "—", c["meaning"]]
             for n, c in enumerate(d["charts"], start=1)
         ], [0.9, 4.2, 2.6, 3.6, 4, 3.2, 7.6])
         doc.add_paragraph().add_run("Filtres du dashboard").bold = True
-        add_table(doc, ["Filtre", "Colonne", "Portée / remarque"], [
-            [f["label"], f["column"], f["scope"]] for f in d["filters"]
-        ], [5, 5, 16])
+        add_table(doc, ["Filtre", "Portée / remarque"], [
+            [f["label"], f["scope"]] for f in d["filters"]
+        ], [6, 20])
 
-    doc.add_heading("Annexe : conventions et définitions", 1)
-    add_table(doc, ["Terme / colonne", "Définition"], [[t, v] for t, v in CONVENTIONS], [6, 20])
+    doc.add_heading("Annexe : définitions", 1)
+    add_table(doc, ["Terme", "Définition"], [[t, v] for t, v in CONVENTIONS], [6, 20])
 
     out.parent.mkdir(parents=True, exist_ok=True)
     doc.save(out)
-    return {"dashboards": len(dashboards), "datasets": n_datasets, "charts": n_charts, "metrics": n_metrics}
+    return {"dashboards": len(dashboards), "charts": n_charts, "rules": n_rules}
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--out", type=Path, default=DEFAULT_OUT)
+    parser.add_argument("--base-url", default="http://localhost:8088", help="adresse publique de Superset")
+    parser.add_argument("--cod-soc", default="01", help="société ajoutée aux URL (?cod_soc=..), vide pour aucune")
     args = parser.parse_args()
     dashboards = load_dashboards()
-    stats = build_document(dashboards, args.out)
+    stats = build_document(dashboards, args.out, args.base_url, args.cod_soc)
     print(", ".join(f"{v} {k}" for k, v in stats.items()))
     print(f"document: {args.out}")
 

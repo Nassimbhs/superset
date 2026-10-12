@@ -15,6 +15,13 @@ DATASETS = [
         Metric("absents_jour", "COUNT(DISTINCT CASE WHEN EN_COURS = 1 THEN MAT_PERS END)", "Absents aujourd'hui"),
         Metric("agents", "COUNT(DISTINCT MAT_PERS)", "Agents concernés"),
     ], main_dttm_col="DAT_DEBUT"),
+    Dataset("sld", "v_grh_soldes_conges", "soldes_conges.sql", [
+        Metric("solde_total", "SUM(SOLDE_JOURS)", "Solde de congé (jours)", ",.1f"),
+        Metric("solde_moy_agent", "AVG(SOLDE_JOURS)", "Solde moyen par agent (jours)", ",.1f"),
+        Metric("jours_pris", "SUM(JOURS_PRIS)", "Jours de congé pris", ",.1f"),
+        Metric("jours_acquis", "SUM(JOURS_ACQUIS)", "Jours de congé acquis", ",.1f"),
+        Metric("agents_solde", "COUNT(DISTINCT MAT_PERS)", "Agents"),
+    ]),
 ]
 
 NON_ANNULE = simple_filter("STATUT", "!=", "Annulé")
