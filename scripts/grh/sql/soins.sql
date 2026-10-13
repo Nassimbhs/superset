@@ -2,7 +2,6 @@ SELECT
     b.cod_soc,
     b.num_soins,
     b.mat_pers,
-    e.nom_prenom,
     e.sexe,
     e.pole,
     e.direction,

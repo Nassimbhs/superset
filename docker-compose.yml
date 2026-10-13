@@ -229,44 +229,10 @@ services:
     healthcheck:
       test: ["CMD-SHELL", "celery inspect ping -A superset.tasks.celery_app:app -d celery@$$HOSTNAME"]
 
-  # Local LLM for the GRH assistant. On a Windows dev box Ollama usually runs
-  # natively (see OLLAMA_URL in docker/.env-local); start these with
-  # `docker compose --profile ollama up -d` to run it in Docker instead.
-  ollama:
-    image: ollama/ollama:latest
-    container_name: superset_ollama
-    profiles:
-      - ollama
-    restart: unless-stopped
-    environment:
-      OLLAMA_NUM_PARALLEL: "1"
-      OLLAMA_MAX_LOADED_MODELS: "1"
-      OLLAMA_KEEP_ALIVE: "30m"
-    volumes:
-      - ollama:/root/.ollama
-    mem_limit: 3g
-
-  ollama-pull:
-    image: ollama/ollama:latest
-    container_name: superset_ollama_pull
-    profiles:
-      - ollama
-    depends_on:
-      - ollama
-    env_file:
-      - path: docker/.env
-        required: true
-    environment:
-      OLLAMA_HOST: ollama:11434
-    entrypoint: ["sh", "-c", "sleep 5 && ollama pull $${OLLAMA_MODEL:-qwen2.5-coder:1.5b}"]
-    restart: "no"
-
 volumes:
   superset_home:
     external: false
   db_home:
     external: false
   redis:
-    external: false
-  ollama:
     external: false

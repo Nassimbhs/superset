@@ -127,41 +127,10 @@ services:
     healthcheck:
       disable: true
 
-  # Local LLM for the GRH assistant. No published port: only reachable
-  # from the compose network at http://ollama:11434.
-  ollama:
-    image: ollama/ollama:latest
-    container_name: superset_ollama
-    restart: unless-stopped
-    environment:
-      OLLAMA_NUM_PARALLEL: "1"
-      OLLAMA_MAX_LOADED_MODELS: "1"
-      OLLAMA_KEEP_ALIVE: "30m"
-    volumes:
-      - ollama:/root/.ollama
-    mem_limit: 3g
-
-  ollama-pull:
-    image: ollama/ollama:latest
-    container_name: superset_ollama_pull
-    depends_on:
-      - ollama
-    env_file:
-      - path: docker/.env
-        required: true
-      - path: docker/.env-local
-        required: false
-    environment:
-      OLLAMA_HOST: ollama:11434
-    entrypoint: ["sh", "-c", "sleep 5 && ollama pull $${OLLAMA_MODEL:-qwen2.5-coder:1.5b}"]
-    restart: "no"
-
 volumes:
   superset_home:
     external: false
   db_home:
     external: false
   redis:
-    external: false
-  ollama:
     external: false

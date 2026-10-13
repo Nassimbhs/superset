@@ -2,7 +2,6 @@ SELECT
     s.cod_soc,
     s.num_prime_s,
     s.mat_pers,
-    e.nom_prenom,
     e.sexe,
     e.pole,
     e.direction,
