@@ -138,3 +138,12 @@ PROJECT.md
 oxc-custom-build/
 *.code-workspace
 *.duckdb
+
+# Oracle Instant Client archive (too large for git, see INSTALL-RHEL-ORACLE.md)
+instantclient-*.zip
+_dash*.json
+
+# GRH scripts: ids and links of the local Superset instance
+scripts/grh/grh_ids.json
+scripts/grh/exports/public_links*.csv
+~$*

@@ -1,0 +1,16 @@
+services:
+  superset:
+    image: docker.io/nassimbenhassine/superset-oracle:6.1.0-oracle
+    build: !reset null
+
+  superset-init:
+    image: docker.io/nassimbenhassine/superset-oracle:6.1.0-oracle
+    build: !reset null
+
+  superset-worker:
+    image: docker.io/nassimbenhassine/superset-oracle:6.1.0-oracle
+    build: !reset null
+
+  superset-worker-beat:
+    image: docker.io/nassimbenhassine/superset-oracle:6.1.0-oracle
+    build: !reset null

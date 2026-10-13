@@ -1,0 +1,63 @@
+x-oracle-env: &oracle-env
+  ORACLE_HOME: /opt/oracle/instantclient
+  LD_LIBRARY_PATH: /opt/oracle/instantclient
+  # The image already contains Superset; skip the editable source reinstall
+  # done by docker-bootstrap.sh in dev mode (source tree is not mounted).
+  DEV_MODE: "false"
+  SUPERSET_LOAD_EXAMPLES: "no"
+
+x-oracle-build: &oracle-build
+  context: .
+  dockerfile: docker/Dockerfile.oracle
+  args:
+    SUPERSET_BASE_IMAGE: apache/superset:6.1.0
+    INSTANTCLIENT_ZIP: instantclient-basic-linux.x64-23.26.0.0.0.zip
+
+services:
+  db:
+    ports: !override
+      - "127.0.0.1:5433:5432"
+
+  superset-node:
+    profiles:
+      - dev-frontend
+
+  superset:
+    environment:
+      <<: *oracle-env
+    build: *oracle-build
+    user: superset
+    volumes: !override
+      - ./docker:/app/docker
+      - superset_home:/app/superset_home
+      - superset_data:/app/data
+
+  superset-init:
+    environment:
+      <<: *oracle-env
+    build: *oracle-build
+    user: superset
+    volumes: !override
+      - ./docker:/app/docker
+      - superset_home:/app/superset_home
+      - superset_data:/app/data
+
+  superset-worker:
+    environment:
+      <<: *oracle-env
+    build: *oracle-build
+    user: superset
+    volumes: !override
+      - ./docker:/app/docker
+      - superset_home:/app/superset_home
+      - superset_data:/app/data
+
+  superset-worker-beat:
+    environment:
+      <<: *oracle-env
+    build: *oracle-build
+    user: superset
+    volumes: !override
+      - ./docker:/app/docker
+      - superset_home:/app/superset_home
+      - superset_data:/app/data

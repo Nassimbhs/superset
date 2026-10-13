@@ -1,0 +1,22 @@
+# Ports for running this 6.1 stack next to the 4.1 stack (which keeps 80/8088/8080/5433/6379).
+# Usage: docker compose -p superset61 -f docker-compose.yml -f docker-compose.oracle.yml -f docker-compose.side-by-side.yml up -d
+services:
+  nginx:
+    ports: !override
+      - "8090:80"
+
+  redis:
+    ports: !override
+      - "127.0.0.1:6380:6379"
+
+  db:
+    ports: !override
+      - "127.0.0.1:5434:5432"
+
+  superset:
+    ports: !override
+      - "8089:8088"
+
+  superset-websocket:
+    ports: !override
+      - "8082:8080"
