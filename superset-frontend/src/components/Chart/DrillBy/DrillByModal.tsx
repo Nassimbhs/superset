@@ -21,6 +21,7 @@ import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import {
   BaseFormData,
   Column,
+  GenericDataType,
   QueryData,
   css,
   ensureIsArray,
@@ -29,6 +30,7 @@ import {
   useTheme,
   ContextMenuFilters,
 } from '@superset-ui/core';
+import { Select } from 'src/components';
 import { useDispatch, useSelector } from 'react-redux';
 import { Link } from 'react-router-dom';
 import Modal from 'src/components/Modal';
@@ -63,6 +65,68 @@ import {
 import { useResultsTableView } from './useResultsTableView';
 
 const DEFAULT_ADHOC_FILTER_FIELD_NAME = 'adhoc_filters';
+
+type ResultSort = 'default' | 'value_desc' | 'value_asc' | 'label_asc';
+
+const SORT_OPTIONS: { value: ResultSort; label: string }[] = [
+  { value: 'default', label: t('Par défaut') },
+  { value: 'value_desc', label: t('Valeur décroissante') },
+  { value: 'value_asc', label: t('Valeur croissante') },
+  { value: 'label_asc', label: t('Libellé A → Z') },
+];
+
+// The drilled column is the row label for pie/table-like results; pivoted
+// timeseries results keep the x-axis as label and one numeric column per series.
+const getSortKeys = (result: QueryData, labelColumn?: string) => {
+  const colnames: string[] = ensureIsArray(result.colnames);
+  const coltypes: GenericDataType[] = ensureIsArray(result.coltypes);
+  let labelIndex = labelColumn ? colnames.indexOf(labelColumn) : -1;
+  if (labelIndex < 0) {
+    labelIndex = coltypes.findIndex(type => type !== GenericDataType.Numeric);
+  }
+  if (labelIndex < 0 || coltypes[labelIndex] === GenericDataType.Temporal) {
+    return undefined;
+  }
+  const values = colnames.filter(
+    (name, index) =>
+      index !== labelIndex && coltypes[index] === GenericDataType.Numeric,
+  );
+  return values.length ? { label: colnames[labelIndex], values } : undefined;
+};
+
+const rowTotal = (row: Record<string, unknown>, values: string[]) => {
+  const numbers = values
+    .map(name => row[name])
+    .filter((value): value is number => typeof value === 'number');
+  return numbers.length ? numbers.reduce((sum, value) => sum + value, 0) : null;
+};
+
+const sortResult = (
+  result: QueryData,
+  sort: ResultSort,
+  labelColumn?: string,
+): QueryData => {
+  const keys = getSortKeys(result, labelColumn);
+  if (sort === 'default' || !keys || !Array.isArray(result.data)) {
+    return result;
+  }
+  const direction = sort === 'value_asc' ? 1 : -1;
+  const data = [...result.data].sort((a, b) => {
+    if (sort === 'label_asc') {
+      return String(a[keys.label] ?? '').localeCompare(
+        String(b[keys.label] ?? ''),
+        'fr',
+        { numeric: true, sensitivity: 'base' },
+      );
+    }
+    const va = rowTotal(a, keys.values);
+    const vb = rowTotal(b, keys.values);
+    if (va === null) return vb === null ? 0 : 1;
+    if (vb === null) return -1;
+    return (va - vb) * direction;
+  });
+  return { ...result, data };
+};
 interface ModalFooterProps {
   closeModal?: () => void;
   formData: BaseFormData;
@@ -198,9 +262,30 @@ export default function DrillByModal({
 
   const { displayModeToggle, drillByDisplayMode } = useDisplayModeToggle();
   const [chartDataResult, setChartDataResult] = useState<QueryData[]>();
+  const [resultSort, setResultSort] = useState<ResultSort>('default');
+
+  useEffect(() => {
+    setResultSort('default');
+  }, [currentColumn]);
+
+  const canSortResult = useMemo(
+    () =>
+      !!chartDataResult?.some(result =>
+        getSortKeys(result, currentColumn?.column_name),
+      ),
+    [chartDataResult, currentColumn],
+  );
+
+  const sortedChartDataResult = useMemo(
+    () =>
+      chartDataResult?.map(result =>
+        sortResult(result, resultSort, currentColumn?.column_name),
+      ),
+    [chartDataResult, currentColumn, resultSort],
+  );
 
   const resultsTable = useResultsTableView(
-    chartDataResult,
+    sortedChartDataResult,
     formData.datasource,
     canDownload,
   );
@@ -459,7 +544,31 @@ export default function DrillByModal({
       >
         {metadataBar}
         {breadcrumbs}
-        {displayModeToggle}
+        <div
+          css={css`
+            display: flex;
+            align-items: flex-start;
+            gap: ${theme.gridUnit * 4}px;
+          `}
+        >
+          {displayModeToggle}
+          {canSortResult && (
+            <div
+              css={css`
+                width: ${theme.gridUnit * 50}px;
+              `}
+              data-test="drill-by-sort"
+            >
+              <Select
+                ariaLabel={t('Trier')}
+                options={SORT_OPTIONS}
+                value={resultSort}
+                onChange={value => setResultSort(value as ResultSort)}
+                showSearch={false}
+              />
+            </div>
+          )}
+        </div>
         {isChartDataLoading && <Loading />}
         {!isChartDataLoading && !chartDataResult && (
           <Alert
@@ -467,11 +576,11 @@ export default function DrillByModal({
             message={t('There was an error loading the chart data')}
           />
         )}
-        {drillByDisplayMode === DrillByType.Chart && chartDataResult && (
+        {drillByDisplayMode === DrillByType.Chart && sortedChartDataResult && (
           <DrillByChart
             dataset={dataset}
             formData={drilledFormData}
-            result={chartDataResult}
+            result={sortedChartDataResult}
             onContextMenu={onContextMenu}
             inContextMenu={inContextMenu}
           />

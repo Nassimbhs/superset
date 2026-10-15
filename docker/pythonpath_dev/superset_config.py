@@ -685,6 +685,18 @@ def FLASK_APP_MUTATOR(app):  # noqa: N802
 
     if "LocaleView.index" in app.view_functions:
         app.view_functions["LocaleView.index"] = change_locale
+
+    grh_portal.install(app)
+
+
+# Bulle RH: quick HR data access on every page, see scripts/grh/build_portal_catalog.py
+import grh_portal  # noqa: E402
+
+BLUEPRINTS = [grh_portal.bp]
+
+# ";" + "," so CSV exports open as columns and numbers in a French Excel.
+CSV_EXPORT = {"encoding": "utf-8", "sep": ";", "decimal": ","}
+
 ALERT_REPORTS_NOTIFICATION_DRY_RUN = True
 WEBDRIVER_BASEURL = "http://superset:8088/"  # When using docker compose baseurl should be http://superset_app:8088/
 # The base URL for the email report hyperlinks.

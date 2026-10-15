@@ -259,6 +259,10 @@ const VirtualTable = <RecordType extends object>(
         {...props}
         sticky={false}
         className="virtual-table"
+        onChange={(...args) => {
+          gridRef.current?.scrollTo?.({ scrollTop: 0 });
+          onChange?.(...(args as Parameters<NonNullable<typeof onChange>>));
+        }}
         columns={mergedColumns}
         components={{
           body: renderVirtualList,

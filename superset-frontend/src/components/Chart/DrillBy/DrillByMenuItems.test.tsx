@@ -151,18 +151,67 @@ test('render disabled menu item for supported chart, no columns', async () => {
   screen.getByText('No columns found');
 });
 
-test('render menu item with submenu without searchbox', async () => {
-  const slicedColumns = defaultColumns.slice(0, 9);
+test('render searchbox and sorted columns even with few columns', async () => {
   fetchMock.get(DATASET_ENDPOINT, {
-    result: { columns: slicedColumns },
+    result: {
+      columns: [
+        { column_name: 'zone', groupby: true },
+        { column_name: 'age', groupby: true },
+        { column_name: 'Échelon', groupby: true },
+      ],
+    },
   });
   renderMenu({});
   await waitFor(() => fetchMock.called(DATASET_ENDPOINT));
   await expectDrillByEnabled();
-  slicedColumns.forEach(column => {
-    expect(screen.getByText(column.column_name)).toBeInTheDocument();
-  });
-  expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+  expect(screen.getByRole('textbox')).toBeInTheDocument();
+  const items = within(screen.getByTestId('drill-by-submenu'))
+    .getAllByRole('menuitem')
+    .map(item => item.textContent);
+  expect(items).toEqual(['age', 'Échelon', 'zone']);
+});
+
+test('find a column by one of its values', async () => {
+  fetchMock
+    .get(DATASET_ENDPOINT, {
+      result: {
+        columns: [
+          { column_name: 'region', groupby: true, type_generic: 1 },
+          { column_name: 'grade', groupby: true, type_generic: 1 },
+          { column_name: 'age', groupby: true, type_generic: 0 },
+        ],
+      },
+    })
+    // one query per text column, in menu order: grade, region
+    .post(CHART_DATA_ENDPOINT, {
+      result: [
+        { data: [] },
+        { data: [{ region: 'Tunis' }, { region: 'Tunis Nord' }] },
+      ],
+    });
+  renderMenu({});
+  await waitFor(() => fetchMock.called(DATASET_ENDPOINT));
+  await expectDrillByEnabled();
+
+  userEvent.type(screen.getByRole('textbox'), 'tunis');
+
+  expect(
+    await screen.findByText(
+      'Tunis, Tunis Nord',
+      { exact: false },
+      { timeout: 3000 },
+    ),
+  ).toBeInTheDocument();
+  expect(screen.getByText('region')).toBeInTheDocument();
+  expect(screen.queryByText('grade')).not.toBeInTheDocument();
+  const { queries } = JSON.parse(
+    fetchMock.lastOptions(CHART_DATA_ENDPOINT)?.body as string,
+  );
+  expect(queries).toHaveLength(2);
+  expect(queries[1].filters).toEqual([
+    ...defaultFilters,
+    { col: 'region', op: 'ILIKE', val: '%tunis%' },
+  ]);
 });
 
 test('render menu item with submenu and searchbox', async () => {

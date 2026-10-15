@@ -17,6 +17,7 @@
  * under the License.
  */
 import { render, screen, waitFor } from 'spec/helpers/testing-library';
+import userEvent from '@testing-library/user-event';
 import type { ColumnsType } from 'antd/es/table';
 import { Table, TableSize } from './index';
 
@@ -61,6 +62,25 @@ const testColumns: ColumnsType<BasicData> = [
     key: 'dataType',
   },
 ];
+
+test('goes back to an existing page when the data shrinks', async () => {
+  const rows = Array.from({ length: 12 }, (_, index) => ({
+    columnName: `row ${index}`,
+    columnType: 'Physical',
+    dataType: 'string',
+  }));
+  const props = {
+    size: TableSize.Small,
+    columns: testColumns,
+    defaultPageSize: 5,
+  };
+  const { rerender } = render(<Table {...props} data={rows} />);
+  userEvent.click(await screen.findByTitle('3'));
+  expect(await screen.findByText('row 10')).toBeInTheDocument();
+  rerender(<Table {...props} data={rows.slice(0, 2)} />);
+  expect(await screen.findByText('row 0')).toBeInTheDocument();
+  expect(screen.getByText('row 1')).toBeInTheDocument();
+});
 
 test('renders with default props', async () => {
   render(

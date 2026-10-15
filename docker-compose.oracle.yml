@@ -23,6 +23,8 @@ services:
     volumes: !override
       - ./docker:/app/docker
       - superset_home:/app/superset_home
+      # Frontend built from this repo (npm run build), replaces the image's assets.
+      - ./superset/static/assets:/app/superset/static/assets:ro
 
   superset-init:
     environment:

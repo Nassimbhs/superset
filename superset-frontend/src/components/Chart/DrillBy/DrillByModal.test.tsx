@@ -241,6 +241,46 @@ test('render breadcrumbs', async () => {
   expect(within(breadcrumbItems[0]).getByText('gender')).toBeInTheDocument();
 });
 
+test('sort drill by results by value and filter a column', async () => {
+  fetchMock.post(
+    CHART_DATA_ENDPOINT,
+    {
+      result: [
+        {
+          colnames: ['name', 'count'],
+          coltypes: [1, 0],
+          data: [
+            { name: 'Bob', count: 2 },
+            { name: 'Alice', count: 10 },
+            { name: 'Éric', count: 5 },
+          ],
+          sql_rowcount: 3,
+        },
+      ],
+    },
+    { overwriteRoutes: true },
+  );
+  await renderModal({ column: { column_name: 'name' } });
+  userEvent.click(screen.getByRole('radio', { name: /table/i }));
+  const cellTexts = () =>
+    within(screen.getByTestId('drill-by-results-table'))
+      .getAllByRole('cell')
+      .map(cell => cell.textContent);
+  await waitFor(() => expect(cellTexts()).toContain('Alice'));
+
+  userEvent.click(screen.getByRole('combobox', { name: 'Trier' }));
+  userEvent.click(await screen.findByText('Valeur décroissante'));
+  await waitFor(() =>
+    expect(cellTexts()).toEqual(['Alice', '10', 'Éric', '5', 'Bob', '2']),
+  );
+
+  userEvent.click(screen.getByRole('button', { name: 'Filtrer par colonne' }));
+  userEvent.type(screen.getByPlaceholderText('ex. >100'), '>3');
+  await waitFor(() =>
+    expect(cellTexts()).toEqual(['Alice', '10', 'Éric', '5']),
+  );
+});
+
 test('should render "Edit chart" as disabled without can_explore permission', async () => {
   await renderModal(
     {},

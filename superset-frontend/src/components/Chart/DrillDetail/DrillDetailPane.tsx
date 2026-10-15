@@ -31,11 +31,14 @@ import {
   css,
   ensureIsArray,
   GenericDataType,
+  getTimeFormatter,
   JsonObject,
   QueryFormData,
   t,
+  TimeFormats,
   useTheme,
 } from '@superset-ui/core';
+import { isEqual } from 'lodash';
 import { useResizeDetector } from 'react-resize-detector';
 import Loading from 'src/components/Loading';
 import BooleanCell from 'src/components/Table/cell-renderers/BooleanCell';
@@ -47,11 +50,25 @@ import Table, { ColumnsType, TableSize } from 'src/components/Table';
 import HeaderWithRadioGroup from 'src/components/Table/header-renderers/HeaderWithRadioGroup';
 import { ResourceStatus } from 'src/hooks/apiResources/apiResources';
 import { useDatasetMetadataBar } from 'src/features/datasets/metadataBar/useDatasetMetadataBar';
+import { Input } from 'src/components/Input';
+import { compareCellValues } from 'src/explore/components/DataTableControl';
 import TableControls from './DrillDetailTableControls';
+import DrillDetailColumnFilters, {
+  buildSearchFilters,
+} from './DrillDetailColumnFilters';
 import { getDrillPayload } from './utils';
 import { ResultsPage } from './types';
 
 const PAGE_SIZE = 50;
+const SEARCH_DEBOUNCE = 500;
+const MAX_CLIENT_CHUNKS = 10;
+const timeFormatter = getTimeFormatter(TimeFormats.DATABASE_DATETIME);
+
+const normalize = (value: unknown) =>
+  String(value)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
 
 interface DataType {
   [key: string]: any;
@@ -91,11 +108,22 @@ export default function DrillDetailPane({
     new Map(),
   );
   const [timeFormatting, setTimeFormatting] = useState({});
+  const [columnSearch, setColumnSearch] = useState<Record<string, string>>({});
+  const [searchFilters, setSearchFilters] = useState<
+    BinaryQueryObjectFilterClause[]
+  >([]);
+  const [quickSearch, setQuickSearch] = useState('');
+  const [isSorted, setIsSorted] = useState(false);
+  const [knownColumns, setKnownColumns] = useState<{
+    names: string[];
+    types: GenericDataType[];
+  }>({ names: [], types: [] });
 
   const SAMPLES_ROW_LIMIT = useSelector(
     (state: { common: { conf: JsonObject } }) =>
-      state.common.conf.SAMPLES_ROW_LIMIT,
+      state.common.conf.SAMPLES_ROW_LIMIT ?? 1000,
   );
+  const maxClientRows = SAMPLES_ROW_LIMIT * MAX_CLIENT_CHUNKS;
 
   // Extract datasource ID/type from string ID
   const [datasourceId, datasourceType] = useMemo(
@@ -116,6 +144,41 @@ export default function DrillDetailPane({
 
     return resultsPages.get(lastPageIndex.current);
   }, [pageIndex, resultsPages]);
+
+  // Up to maxClientRows rows are all loaded, so sorting, searching and paging
+  // are done in the browser on the whole result; beyond that, pages come
+  // from the server and only the displayed page can be sorted or searched.
+  const total = resultsPages.get(0)?.total ?? resultsPage?.total;
+  const isClientSide = total !== undefined && total <= maxClientRows;
+
+  useEffect(() => {
+    if (resultsPage?.colNames.length) {
+      setKnownColumns(prev =>
+        isEqual(prev.names, resultsPage.colNames)
+          ? prev
+          : { names: resultsPage.colNames, types: resultsPage.colTypes },
+      );
+    }
+  }, [resultsPage]);
+
+  const invalidSearchColumns = useMemo(
+    () =>
+      buildSearchFilters(columnSearch, knownColumns.names, knownColumns.types)
+        .invalid,
+    [columnSearch, knownColumns],
+  );
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const next = buildSearchFilters(
+        columnSearch,
+        knownColumns.names,
+        knownColumns.types,
+      ).filters as BinaryQueryObjectFilterClause[];
+      setSearchFilters(prev => (isEqual(prev, next) ? prev : next));
+    }, SEARCH_DEBOUNCE);
+    return () => clearTimeout(timer);
+  }, [columnSearch, knownColumns]);
 
   const mappedColumns: ColumnsType<DataType> = useMemo(
     () =>
@@ -162,30 +225,61 @@ export default function DrillDetailPane({
           }
           return String(value);
         },
+        sorter: (a: DataType, b: DataType, sortOrder?: string | null) =>
+          compareCellValues(a[column], b[column], sortOrder === 'descend'),
         width: 150,
       })) || [],
     [resultsPage?.colNames, resultsPage?.colTypes, timeFormatting],
   );
 
+  const rows = useMemo(() => {
+    if (!isClientSide || total === undefined) return resultsPage?.data || [];
+    const pageCount = Math.ceil(total / PAGE_SIZE);
+    return Array.from(
+      { length: pageCount },
+      (_, index) => resultsPages.get(index)?.data || [],
+    ).flat();
+  }, [isClientSide, total, resultsPage?.data, resultsPages]);
+
   const data: DataType[] = useMemo(
     () =>
-      resultsPage?.data.map(
+      rows.map(
         (row, index) =>
           resultsPage?.colNames.reduce(
             (acc, curr) => ({ ...acc, [curr]: row[curr] }),
             {
               key: index,
             },
-          ),
-      ) || [],
-    [resultsPage?.colNames, resultsPage?.data],
+          ) || { key: index },
+      ),
+    [resultsPage?.colNames, rows],
   );
+
+  const displayedData = useMemo(() => {
+    const needle = normalize(quickSearch.trim());
+    if (!needle) return data;
+    const colNames = resultsPage?.colNames || [];
+    const colTypes = resultsPage?.colTypes || [];
+    return data.filter(row =>
+      colNames.some((name, index) => {
+        const value = row[name];
+        if (value === null || value === undefined) return false;
+        const text =
+          colTypes[index] === GenericDataType.Temporal &&
+          typeof value === 'number'
+            ? timeFormatter(value)
+            : value;
+        return normalize(text).includes(needle);
+      }),
+    );
+  }, [data, quickSearch, resultsPage?.colNames, resultsPage?.colTypes]);
 
   // Clear cache on reload button click
   const handleReload = useCallback(() => {
     setResponseError('');
     setResultsPages(new Map());
     setPageIndex(0);
+    setIsSorted(false);
   }, []);
 
   // Clear cache and reset page index if filters change
@@ -193,7 +287,8 @@ export default function DrillDetailPane({
     setResponseError('');
     setResultsPages(new Map());
     setPageIndex(0);
-  }, [filters]);
+    setIsSorted(false);
+  }, [filters, searchFilters]);
 
   // Update cache order if page in cache
   useEffect(() => {
@@ -216,31 +311,73 @@ export default function DrillDetailPane({
   useEffect(() => {
     if (!responseError && !isLoading && !resultsPages.has(pageIndex)) {
       setIsLoading(true);
-      const jsonPayload = getDrillPayload(formData, filters) ?? {};
+      const jsonPayload =
+        getDrillPayload(formData, [...filters, ...searchFilters]) ?? {};
       const cachePageLimit = Math.ceil(SAMPLES_ROW_LIMIT / PAGE_SIZE);
-      getDatasourceSamples(
-        datasourceType,
-        datasourceId,
-        false,
-        jsonPayload,
-        PAGE_SIZE,
-        pageIndex + 1,
-      )
+      // the first load fetches every row (in SAMPLES_ROW_LIMIT chunks, the
+      // largest page the API accepts) as long as there are at most
+      // maxClientRows of them, then splits them into pages
+      const isFirstLoad = resultsPages.size === 0 && pageIndex === 0;
+      const fetchSamples = (perPage: number, page: number) =>
+        getDatasourceSamples(
+          datasourceType,
+          datasourceId,
+          false,
+          jsonPayload,
+          perPage,
+          page,
+        );
+      const request = isFirstLoad
+        ? fetchSamples(SAMPLES_ROW_LIMIT, 1).then(async first => {
+            const chunkCount = Math.ceil(first.total_count / SAMPLES_ROW_LIMIT);
+            if (chunkCount <= 1 || first.total_count > maxClientRows) {
+              return first;
+            }
+            const rest = await Promise.all(
+              Array.from({ length: chunkCount - 1 }, (_, index) =>
+                fetchSamples(SAMPLES_ROW_LIMIT, index + 2),
+              ),
+            );
+            return {
+              ...first,
+              data: [first, ...rest].flatMap(chunk => chunk.data),
+            };
+          })
+        : fetchSamples(PAGE_SIZE, pageIndex + 1);
+      request
         .then(response => {
-          setResultsPages(
-            new Map([
-              ...[...resultsPages.entries()].slice(-cachePageLimit + 1),
-              [
-                pageIndex,
-                {
-                  total: response.total_count,
-                  data: response.data,
-                  colNames: ensureIsArray(response.colnames),
-                  colTypes: ensureIsArray(response.coltypes),
-                },
-              ],
-            ]),
-          );
+          const page = (data: Record<string, any>[]) => ({
+            total: response.total_count,
+            data,
+            colNames: ensureIsArray(response.colnames),
+            colTypes: ensureIsArray(response.coltypes),
+          });
+          if (isFirstLoad) {
+            const chunks = Math.max(
+              Math.ceil(response.data.length / PAGE_SIZE),
+              1,
+            );
+            setResultsPages(
+              new Map(
+                Array.from({ length: chunks }, (_, index) => [
+                  index,
+                  page(
+                    response.data.slice(
+                      index * PAGE_SIZE,
+                      (index + 1) * PAGE_SIZE,
+                    ),
+                  ),
+                ]),
+              ),
+            );
+          } else {
+            setResultsPages(
+              new Map([
+                ...[...resultsPages.entries()].slice(-cachePageLimit + 1),
+                [pageIndex, page(response.data)],
+              ]),
+            );
+          }
           setResponseError('');
         })
         .catch(error => {
@@ -252,6 +389,7 @@ export default function DrillDetailPane({
     }
   }, [
     SAMPLES_ROW_LIMIT,
+    maxClientRows,
     datasourceId,
     datasourceType,
     filters,
@@ -260,6 +398,7 @@ export default function DrillDetailPane({
     pageIndex,
     responseError,
     resultsPages,
+    searchFilters,
   ]);
 
   const bootstrapping =
@@ -292,16 +431,25 @@ export default function DrillDetailPane({
     tableContent = (
       <Resizable>
         <Table
-          data={data}
+          data={displayedData}
           columns={mappedColumns}
           size={TableSize.Small}
           defaultPageSize={PAGE_SIZE}
-          recordCount={resultsPage?.total}
+          recordCount={isClientSide ? displayedData.length : resultsPage?.total}
           usePagination
           loading={isLoading}
-          onChange={pagination =>
-            setPageIndex(pagination.current ? pagination.current - 1 : 0)
-          }
+          onChange={(pagination, _filters, sorter, extra) => {
+            if (extra?.action === 'sort') {
+              setIsSorted(
+                ensureIsArray(sorter).some(
+                  item => item && 'order' in item && !!item.order,
+                ),
+              );
+            }
+            if (!isClientSide) {
+              setPageIndex(pagination.current ? pagination.current - 1 : 0);
+            }
+          }}
           resizable
           virtualize
           allowHTML={allowHTML}
@@ -310,17 +458,75 @@ export default function DrillDetailPane({
     );
   }
 
+  const showControls =
+    !bootstrapping ||
+    (knownColumns.names.length > 0 &&
+      metadataBarStatus !== ResourceStatus.Loading);
+
   return (
     <>
-      {!bootstrapping && metadataBar}
-      {!bootstrapping && (
+      {showControls && metadataBar}
+      {showControls && (
         <TableControls
           filters={filters}
           setFilters={setFilters}
-          totalCount={resultsPage?.total}
+          totalCount={
+            quickSearch.trim() && isClientSide
+              ? displayedData.length
+              : resultsPage?.total
+          }
           loading={isLoading}
           onReload={handleReload}
         />
+      )}
+      {showControls && (
+        <div
+          css={css`
+            display: flex;
+            align-items: flex-start;
+            gap: ${theme.gridUnit * 2}px;
+          `}
+        >
+          <div
+            css={css`
+              flex: 1;
+              min-width: 0;
+            `}
+          >
+            <DrillDetailColumnFilters
+              colNames={knownColumns.names}
+              colTypes={knownColumns.types}
+              values={columnSearch}
+              invalid={invalidSearchColumns}
+              onChange={setColumnSearch}
+            />
+          </div>
+          <Input
+            size="small"
+            allowClear
+            aria-label={t('Rechercher dans le tableau')}
+            placeholder={t('Rechercher dans le tableau')}
+            value={quickSearch}
+            onChange={e => setQuickSearch(e.target.value)}
+            css={css`
+              width: ${theme.gridUnit * 60}px;
+            `}
+          />
+        </div>
+      )}
+      {showControls && !isClientSide && (isSorted || quickSearch.trim()) && (
+        <div
+          css={css`
+            margin-bottom: ${theme.gridUnit * 2}px;
+            font-size: ${theme.typography.sizes.s}px;
+            color: ${theme.colors.grayscale.base};
+          `}
+        >
+          {t(
+            'Plus de %s lignes : le tri et la recherche ne portent que sur la page affichée. Utilisez « Filtrer par colonne » pour cibler toutes les lignes.',
+            maxClientRows,
+          )}
+        </div>
       )}
       {tableContent}
     </>

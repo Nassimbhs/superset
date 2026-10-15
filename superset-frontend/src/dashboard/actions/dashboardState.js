@@ -688,7 +688,7 @@ const updateDashboardMetadata = async (id, metadata, dispatch) => {
 
 export const updateDashboardLabelsColor = () => async (dispatch, getState) => {
   const {
-    dashboardInfo: { id, metadata },
+    dashboardInfo: { id, metadata, dash_edit_perm: canEdit },
   } = getState();
   const categoricalSchemes = getCategoricalSchemeRegistry();
   const colorScheme = metadata?.color_scheme;
@@ -732,9 +732,12 @@ export const updateDashboardLabelsColor = () => async (dispatch, getState) => {
       updatedMetadata.color_scheme_domain = freshColorSchemeDomain;
     }
 
+    // viewers (including anonymous Public users) cannot save the dashboard:
+    // a 401 here would redirect them to the login page
     if (
-      (colorScheme && (!colorSchemeRegistry || !isRegistrySynced)) ||
-      !isMapSynced
+      canEdit &&
+      ((colorScheme && (!colorSchemeRegistry || !isRegistrySynced)) ||
+        !isMapSynced)
     ) {
       await updateDashboardMetadata(id, updatedMetadata, dispatch);
     }

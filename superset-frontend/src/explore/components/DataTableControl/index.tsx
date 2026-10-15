@@ -28,7 +28,7 @@ import {
   useTheme,
 } from '@superset-ui/core';
 import { Global } from '@emotion/react';
-import { Column } from 'react-table';
+import { Column, UseSortByColumnOptions } from 'react-table';
 import { debounce } from 'lodash';
 import { Space } from 'src/components';
 import { Input } from 'src/components/Input';
@@ -45,6 +45,33 @@ import Popover from 'src/components/Popover';
 import { prepareCopyToClipboardTabularData } from 'src/utils/common';
 import CopyToClipboard from 'src/components/CopyToClipboard';
 import { getTimeColumns, setTimeColumns } from './utils';
+
+const isBlank = (value: unknown) => value === null || value === undefined;
+
+// Numbers and timestamps compare numerically, text with French collation,
+// and empty cells stay at the bottom whatever the direction (callers negate
+// the result for a descending sort).
+export const compareCellValues = (a: unknown, b: unknown, desc?: boolean) => {
+  if (isBlank(a) || isBlank(b)) {
+    if (isBlank(a) && isBlank(b)) return 0;
+    return isBlank(a) === !desc ? 1 : -1;
+  }
+  if (typeof a === 'number' && typeof b === 'number') return a - b;
+  if (typeof a === 'boolean' && typeof b === 'boolean') {
+    return Number(a) - Number(b);
+  }
+  return String(a).localeCompare(String(b), 'fr', {
+    numeric: true,
+    sensitivity: 'base',
+  });
+};
+
+export const sortCellValues = (
+  rowA: { values: Record<string, unknown> },
+  rowB: { values: Record<string, unknown> },
+  columnId: string,
+  desc?: boolean,
+) => compareCellValues(rowA.values[columnId], rowB.values[columnId], desc);
 
 export const CellNull = styled('span')`
   color: ${({ theme }) => theme.colors.grayscale.light1};
@@ -322,6 +349,7 @@ export const useTableColumns = (
                 // react-table requires a non-empty id, therefore we introduce a fallback value in case the key is empty
                 id: key || index,
                 accessor: row => row[key],
+                sortType: sortCellValues,
                 Header:
                   colType === GenericDataType.Temporal &&
                   typeof firstValue !== 'string' ? (
@@ -357,7 +385,7 @@ export const useTableColumns = (
                   return String(value);
                 },
                 ...moreConfigs?.[key],
-              } as Column;
+              } as Column & UseSortByColumnOptions<{}>;
             })
         : [],
     [

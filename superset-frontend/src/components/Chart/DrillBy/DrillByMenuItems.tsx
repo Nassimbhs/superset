@@ -33,7 +33,9 @@ import {
   Column,
   ContextMenuFilters,
   FAST_DEBOUNCE,
+  GenericDataType,
   JsonResponse,
+  SupersetClient,
   css,
   ensureIsArray,
   getChartMetadataRegistry,
@@ -62,8 +64,16 @@ import { MenuItemWithTruncation } from '../MenuItemWithTruncation';
 import { Dataset } from '../types';
 
 const SUBMENU_HEIGHT = 200;
-const SHOW_COLUMNS_SEARCH_THRESHOLD = 10;
 const SEARCH_INPUT_HEIGHT = 48;
+const VALUE_SEARCH_MIN_LENGTH = 2;
+const VALUE_SEARCH_DEBOUNCE = 400;
+const VALUE_SEARCH_MAX_COLUMNS = 40;
+const VALUE_SEARCH_SAMPLES = 3;
+
+type DrillByItem = { column: Column; matches?: string[] };
+
+const columnLabel = (column: Column) =>
+  column.verbose_name || column.column_name;
 
 export interface DrillByMenuItemsProps {
   drillByConfig?: ContextMenuFilters['drillBy'];
@@ -94,6 +104,7 @@ const queryString = rison.encode({
     'columns.column_name',
     'columns.verbose_name',
     'columns.groupby',
+    'columns.type_generic',
   ],
 });
 
@@ -118,9 +129,13 @@ export const DrillByMenuItems = ({
   const [columns, setColumns] = useState<Column[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [currentColumn, setCurrentColumn] = useState();
+  const [valueMatches, setValueMatches] = useState<Record<string, string[]>>(
+    {},
+  );
+  const [isSearchingValues, setIsSearchingValues] = useState(false);
+  const valueSearchCache = useRef(new Map<string, Record<string, string[]>>());
   const ref = useRef<AntdInput>(null);
-  const showSearch =
-    loadDrillByOptions || columns.length > SHOW_COLUMNS_SEARCH_THRESHOLD;
+  const showSearch = true;
   const handleSelection = useCallback(
     (event, column) => {
       onClick(event);
@@ -173,9 +188,15 @@ export const DrillByMenuItems = ({
         const { json } = response;
         const { result } = json;
         setDataset(result);
+        valueSearchCache.current.clear();
         setColumns(
           ensureIsArray(result.columns)
             .filter(column => column.groupby)
+            .sort((a: Column, b: Column) =>
+              columnLabel(a).localeCompare(columnLabel(b), 'fr', {
+                sensitivity: 'base',
+              }),
+            )
             .filter(
               column =>
                 !ensureIsArray(
@@ -212,15 +233,99 @@ export const DrillByMenuItems = ({
     FAST_DEBOUNCE,
   );
 
-  const filteredColumns = useMemo(
-    () =>
-      columns.filter(column =>
-        (column.verbose_name || column.column_name)
-          .toLowerCase()
-          .includes(searchInput.toLowerCase()),
-      ),
-    [columns, searchInput],
-  );
+  const searchText = searchInput.trim();
+
+  useEffect(() => {
+    if (searchText.length < VALUE_SEARCH_MIN_LENGTH || !dataset) {
+      setValueMatches({});
+      setIsSearchingValues(false);
+      return undefined;
+    }
+    const cached = valueSearchCache.current.get(searchText.toLowerCase());
+    if (cached) {
+      setValueMatches(cached);
+      return undefined;
+    }
+    const textColumns = columns
+      .filter(column => column.type_generic === GenericDataType.String)
+      .slice(0, VALUE_SEARCH_MAX_COLUMNS);
+    if (!textColumns.length) {
+      setValueMatches({});
+      return undefined;
+    }
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      const [datasourceId, datasourceType = 'table'] =
+        formData.datasource.split('__');
+      const pointFilters = ensureIsArray(drillByConfig?.filters).map(
+        ({ col, op, val }) => ({ col, op, val }),
+      );
+      setIsSearchingValues(true);
+      try {
+        const { json } = await SupersetClient.post({
+          endpoint: '/api/v1/chart/data',
+          signal: controller.signal,
+          jsonPayload: {
+            datasource: { id: Number(datasourceId), type: datasourceType },
+            form_data: formData,
+            result_format: 'json',
+            result_type: 'full',
+            queries: textColumns.map(column => ({
+              columns: [column.column_name],
+              metrics: [],
+              filters: [
+                ...pointFilters,
+                {
+                  col: column.column_name,
+                  op: 'ILIKE',
+                  val: `%${searchText}%`,
+                },
+              ],
+              row_limit: VALUE_SEARCH_SAMPLES,
+              url_params: formData.url_params,
+            })),
+          },
+        });
+        const matches: Record<string, string[]> = {};
+        ensureIsArray(json?.result).forEach((res: any, index: number) => {
+          const name = textColumns[index].column_name;
+          const values = ensureIsArray(res?.data)
+            .map((row: Record<string, unknown>) => row[name])
+            .filter(value => value != null && value !== '')
+            .map(String);
+          if (values.length) matches[name] = values;
+        });
+        valueSearchCache.current.set(searchText.toLowerCase(), matches);
+        setValueMatches(matches);
+      } catch (error) {
+        if (!controller.signal.aborted) {
+          logging.error(error);
+          setValueMatches({});
+        }
+      } finally {
+        if (!controller.signal.aborted) setIsSearchingValues(false);
+      }
+    }, VALUE_SEARCH_DEBOUNCE);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [columns, dataset, drillByConfig?.filters, formData, searchText]);
+
+  const filteredColumns = useMemo<DrillByItem[]>(() => {
+    const needle = searchText.toLowerCase();
+    const byName = columns
+      .filter(column => columnLabel(column).toLowerCase().includes(needle))
+      .map(column => ({ column }));
+    const byValue = columns
+      .filter(
+        column =>
+          valueMatches[column.column_name] &&
+          !columnLabel(column).toLowerCase().includes(needle),
+      )
+      .map(column => ({ column, matches: valueMatches[column.column_name] }));
+    return [...byName, ...byValue];
+  }, [columns, searchText, valueMatches]);
 
   const submenuYOffset = useMemo(
     () =>
@@ -259,20 +364,33 @@ export const DrillByMenuItems = ({
     style,
   }: {
     index: number;
-    data: { columns: Column[] };
+    data: { columns: DrillByItem[] };
     style: CSSProperties;
   }) => {
     const { columns, ...rest } = data;
-    const column = columns[index];
+    const { column, matches } = columns[index];
+    const label = columnLabel(column);
+    const hint = matches?.join(', ');
     return (
       <MenuItemWithTruncation
         key={`drill-by-item-${column.column_name}`}
-        tooltipText={column.verbose_name || column.column_name}
+        tooltipText={hint ? `${label} — ${hint}` : label}
         {...rest}
         onClick={e => handleSelection(e, column)}
         style={style}
       >
-        {column.verbose_name || column.column_name}
+        {label}
+        {hint && (
+          <span
+            css={css`
+              color: ${theme.colors.grayscale.base};
+              font-size: ${theme.typography.sizes.s}px;
+            `}
+          >
+            {' — '}
+            {hint}
+          </span>
+        )}
       </MenuItemWithTruncation>
     );
   };
@@ -299,7 +417,7 @@ export const DrillByMenuItems = ({
                 e.stopPropagation();
                 handleInput(e.target.value);
               }}
-              placeholder={t('Search columns')}
+              placeholder={t('Rechercher une colonne ou une valeur')}
               onClick={e => {
                 // prevent closing menu when clicking on input
                 e.nativeEvent.stopImmediatePropagation();
@@ -334,8 +452,21 @@ export const DrillByMenuItems = ({
             </List>
           ) : (
             <Menu.Item disabled key="no-drill-by-columns-found" {...rest}>
-              {t('No columns found')}
+              {isSearchingValues
+                ? t('Recherche des valeurs…')
+                : t('No columns found')}
             </Menu.Item>
+          )}
+          {isSearchingValues && filteredColumns.length > 0 && (
+            <div
+              css={css`
+                padding: 0 ${theme.gridUnit * 3}px ${theme.gridUnit}px;
+                color: ${theme.colors.grayscale.base};
+                font-size: ${theme.typography.sizes.s}px;
+              `}
+            >
+              {t('Recherche des valeurs…')}
+            </div>
           )}
         </div>
       </Menu.SubMenu>

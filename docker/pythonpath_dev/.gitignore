@@ -21,3 +21,6 @@
 !.gitignore
 !superset_config.py
 !superset_config_local.example
+!grh_portal/
+!grh_portal/**
+grh_portal/**/__pycache__/

@@ -272,6 +272,7 @@ export function Table<RecordType extends object>(
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const [derivedColumns, setDerivedColumns] = useState(columns);
   const [pageSize, setPageSize] = useState(defaultPageSize);
+  const [currentPage, setCurrentPage] = useState(1);
   const [mergedLocale, setMergedLocale] = useState<
     Required<AntTableProps<RecordType>>['locale']
   >({ ...defaultLocale });
@@ -356,9 +357,31 @@ export function Table<RecordType extends object>(
 
   const theme = useTheme();
 
+  // antd keeps the current page when the data shrinks (e.g. after a search),
+  // which would show an empty page with the pagination hidden
+  const pageCount = Math.max(
+    Math.ceil((recordCount || data?.length || 0) / pageSize),
+    1,
+  );
+  const mergedCurrentPage = Math.min(currentPage, pageCount);
+  useEffect(() => {
+    if (currentPage > pageCount) setCurrentPage(pageCount);
+  }, [currentPage, pageCount]);
+
+  const handleChange: OnChangeFunction<RecordType> = (
+    pagination,
+    filters,
+    sorter,
+    extra,
+  ) => {
+    if (pagination?.current) setCurrentPage(pagination.current);
+    onChange(pagination, filters, sorter, extra);
+  };
+
   const paginationSettings: PaginationProps | false = usePagination
     ? {
         hideOnSinglePage: true,
+        current: mergedCurrentPage,
         pageSize,
         pageSizeOptions,
         onShowSizeChange: (page: number, size: number) => setPageSize(size),
@@ -394,7 +417,7 @@ export function Table<RecordType extends object>(
     pagination: paginationSettings,
     locale: mergedLocale,
     showSorterTooltip: false,
-    onChange,
+    onChange: handleChange,
     onRow,
     theme,
     height: bodyHeight,
@@ -420,10 +443,9 @@ export function Table<RecordType extends object>(
             scroll={{
               y: 300,
               x: '100vw',
-              // To avoid jest failure by scrollTo
-              ...(process.env.WEBPACK_MODE === 'test' && {
-                scrollToFirstRowOnChange: false,
-              }),
+              // the virtual body has no scrollTop for antd to reset;
+              // VirtualTable scrolls its grid back to the top itself
+              scrollToFirstRowOnChange: false,
             }}
             allowHTML={allowHTML}
           />

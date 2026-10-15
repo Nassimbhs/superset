@@ -50,6 +50,7 @@ export const useResultsTableView = (
           datasourceId={datasourceId}
           isVisible
           canDownload={canDownload}
+          showColumnFilters
         />
       </PaginationContainer>
     );
@@ -68,6 +69,7 @@ export const useResultsTableView = (
               datasourceId={datasourceId}
               isVisible
               canDownload={canDownload}
+              showColumnFilters
             />
           </PaginationContainer>
         </Tabs.TabPane>

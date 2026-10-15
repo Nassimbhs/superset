@@ -47,7 +47,10 @@ function HeaderWithRadioGroup(props: HeaderWithRadioGroupProps) {
         trigger="click"
         visible={popoverVisible}
         content={
-          <div>
+          // the popover is portaled, but React events still bubble to the
+          // header cell, whose click toggles the column sort
+          // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions
+          <div onClick={e => e.stopPropagation()}>
             <div
               css={css`
                 font-weight: ${theme.typography.weights.bold};
@@ -83,7 +86,10 @@ function HeaderWithRadioGroup(props: HeaderWithRadioGroupProps) {
             margin-top: 3px; // we need exactly 3px to align the icon
             margin-right: ${theme.gridUnit}px;
           `}
-          onClick={() => setPopoverVisible(true)}
+          onClick={e => {
+            e.stopPropagation();
+            setPopoverVisible(true);
+          }}
         />
       </Popover>
       {headerTitle}
