@@ -52,7 +52,7 @@
     const sel = S && {
       dsKey: S.dsKey, metrics: S.metrics, groupby: S.groupby, series: S.series, filters: S.filters,
       from: S.from, to: S.to, label: S.label, presetId: S.presetId, view: S.view, tab: S.tab,
-      timeColumn: S.timeColumn, conditions: S.conditions,
+      timeColumn: S.timeColumn, conditions: S.conditions, detailColumns: S.detailColumns,
     };
     saved = { ...saved, selection: sel || saved.selection };
     try { localStorage.setItem(STORE_KEY, JSON.stringify(saved)); } catch (e) { /* storage full or blocked */ }
@@ -268,7 +268,25 @@
     return q;
   }
 
-  const detailColumns = () => (S.detailColumns && S.detailColumns.length ? S.detailColumns : S.ds.detail_columns);
+  function allColumnKeys(ds = S.ds) {
+    return Object.keys((ds && ds.columns) || {});
+  }
+
+  function sanitizeDetailColumns(ds, columns) {
+    const known = allColumnKeys(ds);
+    if (!Array.isArray(columns)) return known.slice();
+    const kept = [];
+    for (const column of columns) {
+      if (typeof column === 'string' && known.includes(column) && !kept.includes(column)) kept.push(column);
+    }
+    return kept.length ? kept : known.slice();
+  }
+
+  function usefulColumns(ds = S.ds) {
+    return sanitizeDetailColumns(ds, ds.detail_columns);
+  }
+
+  const detailColumns = () => (S.detailColumns && S.detailColumns.length ? S.detailColumns : allColumnKeys());
 
   function detailQuery(labelled) {
     const q = baseQuery();
@@ -373,7 +391,7 @@
       dsKey, ds, company: saved.company ?? CAT.default_company ?? '', from: '', to: '',
       filters: {}, conditions: [], metrics: [ds.metrics[0].name], groupby: AUTO, series: '',
       timeColumn: ds.main_dttm_col, label: '', presetId: null, view: 'bar', tab: 'chart',
-      detailColumns: null, rows: [], detailLoaded: false, token: 0,
+      detailColumns: allColumnKeys(ds), rows: [], detailLoaded: false, token: 0,
       ...overrides,
     };
   }
@@ -391,7 +409,7 @@
       conditions: (p.conditions || []).map((c) => ({ ...c, on: true })),
       timeColumn: p.time_column || ds.main_dttm_col,
       tab: p.view === 'table' ? 'table' : p.view === 'detail' ? 'detail' : 'chart',
-      detailColumns: p.detail_columns || null,
+      detailColumns: allColumnKeys(ds),
     });
     renderExplorer();
   }
@@ -406,10 +424,9 @@
     if (sel && CAT.datasets[sel.dsKey]) {
       const ds = CAT.datasets[sel.dsKey];
       const metrics = (sel.metrics || []).filter((m) => ds.metrics.some((x) => x.name === m));
-      const preset = sel.presetId && CAT.presetsById[sel.presetId];
       S = newSelection(sel.dsKey, {
         ...sel, metrics: metrics.length ? metrics : [ds.metrics[0].name],
-        detailColumns: preset ? preset.detail_columns || null : null,
+        detailColumns: sanitizeDetailColumns(ds, sel.detailColumns),
       });
     } else {
       const first = CAT.presets.find((p) => p.label === EXAMPLES[0]);
@@ -622,6 +639,7 @@
     $('#rtitle').replaceChildren(headerTitle(), h('span', { class: 'sub', text: `${domain.title} · ${ds.label}` }));
     $('#dash').href = `/superset/dashboard/${domain.slug}/${S.company ? `?cod_soc=${encodeURIComponent(S.company)}` : ''}`;
     S.detailLoaded = false;
+    detailCache = null;
     status('Chargement…');
     try {
       const auto = S.groupby === AUTO;
@@ -656,6 +674,7 @@
     S.tab = tab;
     $$('.rtabs button').forEach((b) => b.classList.toggle('active', b.dataset.tab === tab));
     $$('[data-panel]').forEach((p) => { p.hidden = p.dataset.panel !== tab; });
+    syncChartActions();
     if (tab === 'chart') renderCharts();
     if (tab === 'table') renderGrouped();
     if (tab === 'detail' && !S.detailLoaded) loadDetail();
@@ -685,7 +704,12 @@
           }, `${m.label} par ${by} ↗`), holder);
         return card;
       }));
-      $$('.mini .c').forEach((holder, i) => drawChart(holder, S.auto[i], S.auto[i].rows, 'auto'));
+      $$('.mini .c').forEach((holder, i) => {
+        const v = S.auto[i];
+        const m = metricDef(S.ds, v.metrics[0]);
+        const by = grainOf(v.groupby) ? GRAINS[grainOf(v.groupby)].toLowerCase() : colLabel(S.ds, v.groupby).toLowerCase();
+        drawChart(holder, v, v.rows, 'auto', `${m.label} par ${by}`);
+      });
       return;
     }
     box.className = '';
@@ -695,10 +719,10 @@
     }
     const holder = h('div', { class: 'big' });
     box.replaceChildren(holder);
-    drawChart(holder, S, S.rows, S.view);
+    drawChart(holder, S, S.rows, S.view, headerTitle());
   }
 
-  function drawChart(holder, view, data, kindHint) {
+  function drawChart(holder, view, data, kindHint, title) {
     if (!data.length) { holder.replaceChildren(h('p', { class: 'empty', text: 'Aucune donnée.' })); return; }
     const grain = grainOf(view.groupby);
     const key = axisKey(view.groupby, false);
@@ -773,7 +797,81 @@
     option.color = COLORS;
     const chart = window.echarts.init(holder);
     chart.setOption(option);
+    chart.__grh = {
+      option,
+      title,
+      view: { groupby: view.groupby, series: view.series || '', metrics: view.metrics.slice(), limit: view.limit },
+    };
     charts.add(chart);
+  }
+
+  function liveCharts() {
+    return [...charts].filter((c) => c.__grh && !c.isDisposed());
+  }
+
+  function syncChartActions() {
+    const onChart = S && S.tab === 'chart';
+    $$('[data-image], #create-chart').forEach((b) => { b.hidden = !onChart; });
+  }
+
+  function downloadUrl(url, name) {
+    const a = h('a', { href: url, download: name });
+    shadow.append(a);
+    a.click();
+    a.remove();
+  }
+
+  function pngUrl(chart) {
+    return chart.getDataURL({ type: 'png', pixelRatio: 2, backgroundColor: '#fff' });
+  }
+
+  function svgUrl(option, width, height) {
+    const host = h('div', { style: `position:fixed;left:-10000px;top:0;width:${width}px;height:${height}px` });
+    shadow.append(host);
+    const chart = window.echarts.init(host, null, { renderer: 'svg', width, height });
+    chart.setOption({ ...option, dataZoom: [] });
+    const url = chart.getDataURL({ type: 'svg' });
+    chart.dispose();
+    host.remove();
+    return url;
+  }
+
+  function escapeHtml(value) {
+    return String(value).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+  }
+
+  async function exportImages(format) {
+    const list = liveCharts();
+    if (!list.length) { status('Aucun graphique à exporter.', true); return; }
+    const buttons = $$('[data-image], [data-export], #create-chart');
+    buttons.forEach((b) => { b.disabled = true; });
+    try {
+      for (let i = 0; i < list.length; i += 1) {
+        const snap = list[i].__grh;
+        const name = `${slug(snap.title) || 'graphique'}_${isoDate(new Date())}`;
+        if (format === 'png') downloadUrl(pngUrl(list[i]), `${name}.png`);
+        else downloadUrl(svgUrl(snap.option, list[i].getWidth() || 800, list[i].getHeight() || 400), `${name}.svg`);
+        if (i < list.length - 1) await new Promise((resolve) => setTimeout(resolve, 300));
+      }
+      status('');
+    } catch (e) {
+      status(`Export impossible : ${e.message}`, true);
+    } finally {
+      buttons.forEach((b) => { b.disabled = false; });
+    }
+  }
+
+  function printCharts() {
+    const list = liveCharts();
+    if (!list.length) { status('Aucun graphique à imprimer.', true); return; }
+    const win = window.open('', '_blank');
+    if (!win) { status('Autorisez les fenêtres pour imprimer ou enregistrer le PDF.', true); return; }
+    const figures = list.map((c) => `<figure><figcaption>${escapeHtml(c.__grh.title)}</figcaption><img alt="" src="${pngUrl(c)}"></figure>`).join('');
+    win.document.open();
+    win.document.write(`<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><title>${escapeHtml(headerTitle())}</title>
+      <style>body{font-family:sans-serif;margin:24px;color:#0f172a}figcaption{font-weight:600;margin:12px 0 6px}img{max-width:100%}figure{break-inside:avoid;margin:0 0 24px}</style>
+      </head><body>${figures}<script>window.onload=function(){window.print()}<\\/script></body></html>`);
+    win.document.close();
   }
 
   function cellText(col, value) {
@@ -782,14 +880,32 @@
     return value == null || value === '' ? '–' : String(value);
   }
 
-  function renderTable(box, columns, data) {
+  function renderTable(box, columns, data, onRemove, onMove) {
     if (!data.length) { box.replaceChildren(h('p', { class: 'empty', text: 'Aucune donnée pour ces critères.' })); return; }
-    let sortKey = null;
-    let asc = true;
+    if (onMove && detailSort.key && !columns.some((c) => c.key === detailSort.key)) detailSort = { key: null, asc: true };
+    let sortKey = onMove ? detailSort.key : null;
+    let asc = onMove ? detailSort.asc : true;
     const body = h('tbody');
     const head = h('tr', null, columns.map((c) => {
-      const th = h('th', { class: c.type === 'num' ? 'num' : null, title: 'Trier' }, c.label);
-      th.addEventListener('click', () => { asc = sortKey === c.key ? !asc : c.type !== 'num'; sortKey = c.key; draw(); });
+      const th = h('th', { class: c.type === 'num' ? 'num' : null, title: onMove ? 'Glisser pour déplacer, cliquer pour trier' : 'Trier' }, c.label);
+      th.addEventListener('click', () => {
+        if (detailDragged) return;
+        asc = sortKey === c.key ? !asc : c.type !== 'num';
+        sortKey = c.key;
+        if (onMove) detailSort = { key: sortKey, asc };
+        draw();
+      });
+      if (onRemove) {
+        th.append(h('button', {
+          type: 'button', class: 'col-x', title: columns.length > 1 ? 'Retirer cette colonne' : 'Au moins une colonne reste affichée',
+          disabled: columns.length <= 1,
+          onclick: (e) => { e.stopPropagation(); onRemove(c.key); },
+        }, '✕'));
+      }
+      if (onMove) {
+        th.classList.add('col-drag');
+        bindColumnDrag(th, c.key);
+      }
       return th;
     }));
     function draw() {
@@ -829,20 +945,322 @@
     renderTable(box, cols, S.rows);
   }
 
+  let detailToken = 0;
+  let detailCache = null;
+  let detailSort = { key: null, asc: true };
+  let detailDragged = false;
+
+  function detailCovers(columns) {
+    return Boolean(detailCache && columns.every((c) => detailCache.keys.includes(c)));
+  }
+
+  function detailColumnModels() {
+    const cols = detailColumns().map((c) => ({
+      key: c, label: colLabel(S.ds, c), type: S.ds.temporal.includes(c) ? 'date' : 'text',
+    }));
+    (detailCache ? detailCache.rows : []).forEach((r) => cols.forEach((c) => {
+      if (typeof r[c.key] === 'number' && c.type !== 'date') c.type = 'num';
+    }));
+    return cols;
+  }
+
+  function paintDetail() {
+    const box = $('#detail');
+    renderColumnBar();
+    if (!detailCache || !box) return;
+    renderTable(box, detailColumnModels(), detailCache.rows, removeDetailColumn, moveDetailColumn);
+  }
+
+  function setDetailColumns(columns) {
+    const next = sanitizeDetailColumns(S.ds, columns);
+    const prev = S.detailColumns || [];
+    if (next.length === prev.length && next.every((c, i) => c === prev[i])) return;
+    S.detailColumns = next;
+    persist();
+    if (S.tab !== 'detail') renderColumnBar();
+    else if (detailCovers(next)) paintDetail();
+    else {
+      S.detailLoaded = false;
+      loadDetail();
+    }
+  }
+
+  function moveDetailColumn(fromKey, toKey, after) {
+    if (!fromKey || !toKey || fromKey === toKey) return;
+    const order = detailColumns().slice();
+    const from = order.indexOf(fromKey);
+    if (from < 0) return;
+    order.splice(from, 1);
+    let to = order.indexOf(toKey);
+    if (to < 0) return;
+    order.splice(after ? to + 1 : to, 0, fromKey);
+    setDetailColumns(order);
+  }
+
+  function dropAfter(el, event) {
+    const rect = el.getBoundingClientRect();
+    return event.clientX > rect.left + rect.width / 2;
+  }
+
+  function bindColumnDrag(el, key) {
+    el.dataset.col = key;
+    el.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0) return;
+      if (e.target.closest && e.target.closest('.col-x')) return;
+      e.preventDefault();
+      const originX = e.clientX;
+      const originY = e.clientY;
+      const pointerId = e.pointerId;
+      let dragging = false;
+      try { el.setPointerCapture(pointerId); } catch (err) { /* pointer already released */ }
+      const place = (event) => {
+        const hit = shadow.elementFromPoint(event.clientX, event.clientY);
+        const target = hit && hit.closest ? hit.closest('[data-col]') : null;
+        $$('.drop-before, .drop-after').forEach((n) => n.classList.remove('drop-before', 'drop-after'));
+        if (!target || target === el || !target.dataset.col) return null;
+        const after = dropAfter(target, event);
+        target.classList.add(after ? 'drop-after' : 'drop-before');
+        return { key: target.dataset.col, after };
+      };
+      const move = (event) => {
+        if (event.pointerId !== pointerId) return;
+        if (!dragging) {
+          if (Math.hypot(event.clientX - originX, event.clientY - originY) < 4) return;
+          dragging = true;
+          detailDragged = true;
+          el.classList.add('dragging');
+        }
+        place(event);
+      };
+      const finish = (event) => {
+        if (event.pointerId !== pointerId) return;
+        window.removeEventListener('pointermove', move, true);
+        window.removeEventListener('pointerup', finish, true);
+        window.removeEventListener('pointercancel', finish, true);
+        const placed = dragging ? place(event) : null;
+        el.classList.remove('dragging');
+        $$('.drop-before, .drop-after').forEach((n) => n.classList.remove('drop-before', 'drop-after'));
+        if (placed) moveDetailColumn(key, placed.key, placed.after);
+        else if (!dragging) el.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        setTimeout(() => { detailDragged = false; }, 0);
+      };
+      window.addEventListener('pointermove', move, true);
+      window.addEventListener('pointerup', finish, true);
+      window.addEventListener('pointercancel', finish, true);
+    });
+  }
+
+  function removeDetailColumn(col) {
+    const current = detailColumns();
+    if (current.length <= 1 || !current.includes(col)) return;
+    setDetailColumns(current.filter((c) => c !== col));
+  }
+
+  function addDetailColumn(col) {
+    const current = detailColumns();
+    if (!allColumnKeys().includes(col) || current.includes(col)) return;
+    setDetailColumns(current.concat([col]));
+  }
+
+  function renderColumnBar() {
+    const bar = $('#colbar');
+    if (!bar || !S) return;
+    const shown = detailColumns();
+    const hidden = allColumnKeys().filter((c) => !shown.includes(c));
+    const chips = shown.map((c) => {
+      const chip = h('span', { class: 'col-chip', title: 'Glisser pour déplacer' },
+        colLabel(S.ds, c),
+        h('button', {
+          type: 'button', class: 'col-x',
+          title: shown.length > 1 ? 'Retirer cette colonne' : 'Au moins une colonne reste affichée',
+          disabled: shown.length <= 1,
+          onclick: () => removeDetailColumn(c),
+        }, '✕'));
+      bindColumnDrag(chip, c);
+      return chip;
+    });
+    const list = h('div', { class: 'ms-list' });
+    const finder = hidden.length > 8
+      ? h('input', { type: 'search', placeholder: 'Rechercher une colonne…' })
+      : null;
+    const panel = h('div', { class: 'ms-panel', hidden: true }, finder, list);
+    const addBtn = h('button', { type: 'button', class: 'btn', disabled: !hidden.length }, 'Ajouter');
+
+    function draw(query) {
+      const q = norm(query || '');
+      const items = hidden.filter((c) => !q || norm(colLabel(S.ds, c)).includes(q) || norm(c).includes(q));
+      list.replaceChildren(...(items.length
+        ? items.map((c) => h('button', { type: 'button', class: 'col-add', onclick: () => addDetailColumn(c) }, colLabel(S.ds, c)))
+        : [h('p', { class: 'note', text: 'Aucune colonne' })]));
+    }
+    addBtn.addEventListener('click', () => {
+      panel.hidden = !panel.hidden;
+      if (panel.hidden) return;
+      draw(finder ? finder.value : '');
+      if (finder) finder.focus();
+    });
+    if (finder) finder.addEventListener('input', () => draw(finder.value));
+
+    bar.replaceChildren(
+      h('span', { class: 'colbar-label', text: 'Colonnes' }),
+      h('div', { class: 'chips' }, ...chips),
+      h('div', { class: 'colbar-tools' },
+        h('div', { class: 'ms' }, addBtn, panel),
+        h('button', { type: 'button', class: 'link', onclick: () => setDetailColumns(allColumnKeys()) }, 'Toutes'),
+        h('button', { type: 'button', class: 'link', onclick: () => setDetailColumns(usefulColumns()) }, 'Liste utile')));
+  }
+
   async function loadDetail() {
-    const cols = detailColumns().map((c) => ({ key: c, label: colLabel(S.ds, c), type: S.ds.temporal.includes(c) ? 'date' : 'text' }));
+    const token = ++detailToken;
+    const requested = detailColumns().slice();
+    detailCache = null;
     const box = $('#detail');
     const note = $('#dnote');
+    renderColumnBar();
     box.replaceChildren(h('p', { class: 'empty', text: 'Chargement de la liste…' }));
     try {
       const data = await rows(detailQuery(false));
-      data.forEach((r) => cols.forEach((c) => { if (typeof r[c.key] === 'number' && c.type !== 'date') c.type = 'num'; }));
-      renderTable(box, cols, data);
+      if (token !== detailToken) return;
+      detailCache = { keys: requested, rows: data };
+      S.detailLoaded = true;
       note.textContent = data.length >= DETAIL_ROW_LIMIT
         ? `${DETAIL_ROW_LIMIT} premières lignes affichées ; l'export contient toutes les lignes.` : `${data.length} ligne(s).`;
-      S.detailLoaded = true;
+      paintDetail();
     } catch (e) {
-      box.replaceChildren(h('p', { class: 'empty', text: e.message }));
+      if (token === detailToken) box.replaceChildren(h('p', { class: 'empty', text: e.message }));
+    }
+  }
+
+  function chartKind(option) {
+    const series = option.series && option.series[0];
+    if (!series || series.type === 'pie') return { viz: 'pie', horizontal: false, stacked: false };
+    const xAxis = Array.isArray(option.xAxis) ? option.xAxis[0] : option.xAxis;
+    return {
+      viz: series.type === 'line' ? 'echarts_timeseries_line' : 'echarts_timeseries_bar',
+      horizontal: !!(xAxis && xAxis.type === 'value'),
+      stacked: option.series.some((s) => s.stack),
+    };
+  }
+
+  function simpleFilter(subject, operator, comparator) {
+    return { clause: 'WHERE', expressionType: 'SIMPLE', subject, operator, comparator };
+  }
+
+  function adhocFilters() {
+    const filters = [];
+    if (S.ds.has_company && S.company) filters.push(simpleFilter('COD_SOC', '==', S.company));
+    for (const [col, vals] of Object.entries(S.filters)) {
+      if (vals && vals.length) filters.push(simpleFilter(col, 'IN', vals));
+    }
+    if (S.ds.main_dttm_col && (S.from || S.to)) {
+      filters.push(simpleFilter(
+        S.ds.main_dttm_col, 'TEMPORAL_RANGE',
+        `${S.from || '1900-01-01'} : ${S.to ? addDays(S.to, 1) : 'now'}`,
+      ));
+    }
+    for (const c of S.conditions) {
+      if (!c.on) continue;
+      if (c.sql) filters.push({ clause: 'WHERE', expressionType: 'SQL', sqlExpression: c.sql });
+      else filters.push(simpleFilter(c.col, c.op, c.val));
+    }
+    return filters;
+  }
+
+  function sqlMetric(name) {
+    const m = metricDef(S.ds, name);
+    return { expressionType: 'SQL', sqlExpression: m.expression, label: m.label, hasCustomLabel: true };
+  }
+
+  function chartFormData(snap) {
+    const view = snap.view;
+    const kind = chartKind(snap.option);
+    const metrics = view.metrics.map(sqlMetric);
+    const grain = grainOf(view.groupby);
+    const axis = grain ? S.timeColumn : view.groupby;
+    const base = {
+      datasource: `${S.ds.id}__table`,
+      viz_type: kind.viz,
+      adhoc_filters: adhocFilters(),
+      row_limit: view.limit || QUERY_ROW_LIMIT,
+      color_scheme: 'supersetColors',
+    };
+    if (kind.viz === 'pie') {
+      return { ...base, groupby: [axis], metric: metrics[0], show_legend: true, number_format: metricDef(S.ds, view.metrics[0]).format || 'SMART_NUMBER' };
+    }
+    return {
+      ...base,
+      x_axis: axis,
+      time_grain_sqla: grain || undefined,
+      metrics,
+      groupby: view.series ? [view.series] : [],
+      orientation: kind.horizontal ? 'horizontal' : 'vertical',
+      stack: kind.stacked ? 'Stack' : null,
+      show_legend: true,
+      y_axis_format: metricDef(S.ds, view.metrics[0]).format || 'SMART_NUMBER',
+    };
+  }
+
+  async function postChart(snap) {
+    const form = chartFormData(snap);
+    const res = await fetch('/api/v1/chart/', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+      body: JSON.stringify({
+        slice_name: String(snap.title).slice(0, 250),
+        viz_type: form.viz_type,
+        datasource_id: S.ds.id,
+        datasource_type: 'table',
+        params: JSON.stringify(form),
+      }),
+    });
+    if (res.status === 403) throw new Error('Ce compte ne peut pas créer de graphique dans Superset.');
+    if (!res.ok) throw await apiError(res);
+    return (await res.json()).id;
+  }
+
+  async function createSupersetCharts() {
+    const list = liveCharts();
+    if (!list.length) {
+      status(S.groupby ? 'Aucun graphique à créer.' : 'Choisissez « Analyser par » pour créer un graphique.', true);
+      return;
+    }
+    const button = $('#create-chart');
+    const buttons = $$('[data-image], [data-export], #create-chart');
+    const popup = list.length === 1 ? window.open('', '_blank') : null;
+    buttons.forEach((b) => { b.disabled = true; });
+    status(list.length > 1 ? 'Création des graphiques…' : 'Création du graphique…');
+    try {
+      const created = [];
+      for (const chart of list) {
+        created.push({ id: await postChart(chart.__grh), title: chart.__grh.title });
+      }
+      const link = (c) => h('a', { href: `/explore/?slice_id=${c.id}`, target: '_blank', rel: 'noopener' }, c.title);
+      if (created.length === 1) {
+        const url = `/explore/?slice_id=${created[0].id}`;
+        if (popup && !popup.closed) popup.location.href = url;
+        const box = $('#status');
+        box.hidden = false;
+        box.classList.remove('error');
+        box.replaceChildren('Graphique créé dans Superset : ', link(created[0]));
+      } else {
+        if (popup && !popup.closed) popup.close();
+        const box = $('#status');
+        box.hidden = false;
+        box.classList.remove('error');
+        const nodes = [`${created.length} graphiques créés : `];
+        created.forEach((c, i) => {
+          if (i) nodes.push(', ');
+          nodes.push(link(c));
+        });
+        box.replaceChildren(...nodes);
+      }
+    } catch (e) {
+      if (popup && !popup.closed) popup.close();
+      status(e.message, true);
+    } finally {
+      buttons.forEach((b) => { b.disabled = false; });
+      if (button) button.disabled = false;
     }
   }
 
@@ -978,10 +1396,11 @@
     shadow = host.attachShadow({ mode: 'open' });
     shadow.append(h('link', { rel: 'stylesheet', href: `${STATIC}bubble.css` }));
 
-    const fab = h('button', { type: 'button', class: 'fab', title: 'Accès rapide aux données RH (Alt+R)' }, 'RH');
-    const panel = h('section', { class: 'panel', hidden: true, role: 'dialog', 'aria-label': 'Accès rapide RH' },
+    const fab = h('button', { type: 'button', class: 'fab', title: 'Constructeur de graphique (Alt+R)', 'aria-label': 'Constructeur de graphique' });
+    fab.innerHTML = '<svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg>';
+    const panel = h('section', { class: 'panel', hidden: true, role: 'dialog', 'aria-label': 'Constructeur de graphique' },
       h('header', { class: 'bar' },
-        h('span', { class: 'title' }, 'Accès rapide RH'),
+        h('span', { class: 'title' }, 'Constructeur de graphique'),
         h('nav', { class: 'tabs' },
           h('button', { type: 'button', 'data-view': 'explorer', class: 'active' }, 'Données'),
           h('button', { type: 'button', 'data-view': 'kpi' }, 'KPI')),
@@ -1007,8 +1426,13 @@
           h('div', { class: 'results' },
             h('div', { class: 'res-head' },
               h('h3', { id: 'rtitle' }),
-              h('button', { type: 'button', class: 'btn', 'data-export': 'csv' }, 'CSV'),
-              h('button', { type: 'button', class: 'btn', 'data-export': 'xlsx' }, 'Excel')),
+              h('div', { class: 'exports' },
+                h('button', { type: 'button', class: 'btn', 'data-image': 'png', hidden: true }, 'PNG'),
+                h('button', { type: 'button', class: 'btn', 'data-image': 'svg', hidden: true }, 'SVG'),
+                h('button', { type: 'button', class: 'btn', 'data-image': 'pdf', hidden: true }, 'PDF'),
+                h('button', { type: 'button', class: 'btn', id: 'create-chart', hidden: true }, 'Créer dans Superset'),
+                h('button', { type: 'button', class: 'btn', 'data-export': 'csv' }, 'CSV'),
+                h('button', { type: 'button', class: 'btn', 'data-export': 'xlsx' }, 'Excel'))),
             h('div', { id: 'status', class: 'status', hidden: true }),
             h('div', { id: 'kpis', class: 'kpis' }),
             h('div', { class: 'rtabs' },
@@ -1019,7 +1443,10 @@
                 'Tableau de bord ↗')),
             h('div', { 'data-panel': 'chart' }, h('div', { id: 'charts' })),
             h('div', { 'data-panel': 'table', hidden: true }, h('div', { id: 'table' })),
-            h('div', { 'data-panel': 'detail', hidden: true }, h('p', { class: 'note', id: 'dnote' }), h('div', { id: 'detail' })))),
+            h('div', { 'data-panel': 'detail', hidden: true },
+              h('div', { class: 'colbar', id: 'colbar' }),
+              h('p', { class: 'note', id: 'dnote' }),
+              h('div', { id: 'detail' })))),
         h('div', { class: 'view kpi-view', id: 'kpiview', hidden: true },
           h('div', { class: 'kpi-tools' },
             h('input', { id: 'kq', type: 'search', placeholder: 'Rechercher un indicateur : turnover, absentéisme…' }),
@@ -1096,6 +1523,8 @@
     $('#series').addEventListener('change', (e) => { S.series = e.target.value; S.label = ''; scheduleRun(0); });
     $$('.rtabs button').forEach((b) => b.addEventListener('click', () => showTab(b.dataset.tab)));
     $$('[data-export]').forEach((b) => b.addEventListener('click', () => exportData(b.dataset.export)));
+    $$('[data-image]').forEach((b) => b.addEventListener('click', () => (b.dataset.image === 'pdf' ? printCharts() : exportImages(b.dataset.image))));
+    $('#create-chart').addEventListener('click', createSupersetCharts);
     ['#kq', '#kdomain', '#kmain'].forEach((sel) => $(sel).addEventListener(sel === '#kq' ? 'input' : 'change', renderKpiView));
     shadow.addEventListener('click', (e) => {
       $$('.ms-panel').forEach((p) => { if (!p.parentElement.contains(e.target)) p.hidden = true; });

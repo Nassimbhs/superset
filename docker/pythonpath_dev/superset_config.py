@@ -689,6 +689,15 @@ def FLASK_APP_MUTATOR(app):  # noqa: N802
     grh_portal.install(app)
 
 
+# Bulle RH stays on every page until this flag is turned on. The chat endpoint
+# exists either way; only the injected script changes. See grh_portal.
+GRH_ASSISTANT_ENABLED = False
+OLLAMA_BASE_URL = "http://host.docker.internal:11434"
+OLLAMA_MODEL = "qwen2.5:3b"
+GRH_CHAT_TIMEOUT_SEC = 45
+GRH_QUERY_ROW_LIMIT = 500
+GRH_ALLOWED_COMPANIES = ["01"]
+
 # Bulle RH: quick HR data access on every page, see scripts/grh/build_portal_catalog.py
 import grh_portal  # noqa: E402
 

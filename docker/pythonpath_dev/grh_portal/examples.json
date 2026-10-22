@@ -1,0 +1,23 @@
+[
+  {"question": "effectif par sexe", "preset": "effectif.sexe"},
+  {"question": "Effectif actif par direction", "preset": "effectif.extra1"},
+  {"question": "Effectif actif par pôle et par sexe", "preset": "effectif.extra2"},
+  {"question": "Effectif actif par service", "preset": "effectif.extra3"},
+  {"question": "Effectif par statut", "preset": "effectif.extra4"},
+  {"question": "Âge et ancienneté moyens par direction", "preset": "effectif.extra5"},
+  {"question": "Effectif payé par mois", "preset": "synthese.extra6"},
+  {"question": "Jours de congé par direction et par type (12 mois)", "preset": "conges.extra7"},
+  {"question": "Agents formés par catégorie de personnel", "preset": "formation.extra8"},
+  {"question": "Départs par année", "preset": "departs.extra9"},
+  {"question": "Masse salariale et coût employeur par direction (12 mois)", "preset": "salaires.extra10"},
+  {"question": "Salaire moyen par grade", "preset": "salaires.extra11"},
+  {"question": "Recrutements par direction", "preset": "recrutement.extra12"},
+  {"question": "Recrutements par année", "preset": "recrutement.extra13"},
+  {"question": "Taux d'absentéisme maladie par direction (12 mois)", "preset": "sante.extra14"},
+  {"question": "Retards par direction (12 mois)", "preset": "presence.extra15"},
+  {"question": "Note moyenne par direction", "preset": "rendement.extra16"},
+  {"question": "Prêts accordés par direction", "preset": "prets.extra17"},
+  {"question": "Agents au-delà du seuil d'endettement par direction", "preset": "endettement.extra18"},
+  {"question": "Pyramide des âges", "preset": "effectif.pyramide"},
+  {"question": "Retraites prévues dans 5 ans par direction", "preset": "departs.ret_direction"}
+]

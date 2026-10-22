@@ -1,6 +1,14 @@
-{# Included by every Superset page: loads the "Bulle RH" (grh_portal). #}
+{# Included by every Superset page. The chat panel replaces the bubble only when GRH_ASSISTANT_ENABLED is on. #}
+{% if grh_assistant_enabled() %}
+<script src="{{ url_for('grh_portal.static', filename='chat.js') }}"
+        data-static="{{ url_for('grh_portal.static', filename='') }}"
+        data-csrf="{{ url_for('grh_portal.csrf') }}"
+        data-chat="{{ url_for('grh_portal.chat') }}"
+        nonce="{% if csp_nonce is defined %}{{ csp_nonce() }}{% endif %}" defer></script>
+{% else %}
 <script src="{{ url_for('grh_portal.static', filename='bubble.js') }}"
         data-static="{{ url_for('grh_portal.static', filename='') }}"
         data-catalog="{{ url_for('grh_portal.catalog') }}"
         data-csrf="{{ url_for('grh_portal.csrf') }}"
         nonce="{% if csp_nonce is defined %}{{ csp_nonce() }}{% endif %}" defer></script>
+{% endif %}
